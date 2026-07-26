@@ -2,10 +2,6 @@
 
 Self-hosted Plex spoiler protection. It hides the stuff that spoils you before you've watched: blurs or replaces episode and season artwork, clears or rewrites descriptions, and masks episode titles. It does this automatically as new episodes show up, and it's fully reversible whenever you want the originals back.
 
-## Why I built this
-
-I was using Tautulli for exactly one thing: blurring the thumbnails on Survivor episodes so the artwork and titles didn't spoil who's still in the game. Then I rebuilt my Plex and really didn't feel like standing all of Tautulli back up just for that one job. So I built spoilarr instead, which does the thing I actually wanted and nothing I didn't.
-
 It's built for the *arr homelab: a single static Go binary, SQLite plus a folder of images, no external services to babysit.
 
 ## How it works
