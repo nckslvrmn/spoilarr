@@ -1,0 +1,6 @@
+/data/
+/spoilarr
+/dist/
+*.db
+*.db-wal
+*.db-shm

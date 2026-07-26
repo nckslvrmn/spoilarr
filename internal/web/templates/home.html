@@ -1,0 +1,38 @@
+{{define "home.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>spoilarr</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand">spoil<span class="brand-accent">arr</span></span>
+    <span class="tagline">Plex spoiler protection</span>
+  </header>
+
+  <main class="container">
+    {{if .Configured}}
+      <div class="card">
+        <h1>Connected</h1>
+        <p class="muted">spoilarr is linked to <strong>{{.ServerName}}</strong>.</p>
+        <div class="action-row">
+          <a class="btn" href="/libraries">Browse libraries</a>
+          <a class="btn" href="/protected">Protected shows</a>
+          <a class="btn-ghost" href="/setup">Manage connection</a>
+        </div>
+      </div>
+    {{else}}
+      <div class="card">
+        <h1>Welcome</h1>
+        <p class="muted">spoilarr isn't linked to Plex yet. Sign in with your Plex
+        account to get started.</p>
+        <p><a class="btn" href="/setup">Set up spoilarr</a></p>
+      </div>
+    {{end}}
+  </main>
+
+  <footer class="footer muted">spoilarr &middot; self-hosted</footer>
+</body>
+</html>{{end}}

@@ -1,0 +1,47 @@
+{{define "protected.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · protected</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <h1>Protected</h1>
+
+  <div class="status-panel">
+    <div><span class="stat-label">Auto-poll</span> every {{.PollInterval}}</div>
+    <div><span class="stat-label">Last poll</span> {{.LastPoll}}{{if .LastSummary}} — {{.LastSummary}}{{end}}</div>
+    <div><span class="stat-label">Webhook</span> {{if .WebhookSet}}configured{{else}}not set (poller only){{end}}</div>
+  </div>
+
+  {{range .Rows}}
+    {{$it := .Item}}
+    <div class="prot-row">
+      <div class="prot-main">
+        <span class="prot-title"><a href="/protected/{{$it.RatingKey}}">{{$it.Title}}</a></span>
+        <span class="prot-meta">{{$it.MediaType}} · reveal: {{$it.RevealPolicy}}{{if ne $it.SeasonScope "all"}} · seasons {{$it.SeasonScope}}{{end}}</span>
+        {{template "job_status" (jobData $it.RatingKey .Running .Protected .Revealed "")}}
+      </div>
+      <div class="prot-actions">
+        <a class="btn-ghost" href="/protected/{{$it.RatingKey}}">Settings</a>
+        <form hx-post="/protect-now" hx-target="#job-{{$it.RatingKey}}" hx-swap="outerHTML">
+          <input type="hidden" name="rating_key" value="{{$it.RatingKey}}">
+          <button type="submit">Protect now</button>
+        </form>
+        <form hx-post="/reveal" hx-target="#job-{{$it.RatingKey}}" hx-swap="outerHTML">
+          <input type="hidden" name="rating_key" value="{{$it.RatingKey}}">
+          <button type="submit" class="btn-secondary">Reveal</button>
+        </form>
+      </div>
+    </div>
+  {{else}}
+    <p class="muted">Nothing protected yet. <a href="/libraries">Browse your libraries</a> to add shows.</p>
+  {{end}}
+</main>
+</body>
+</html>{{end}}
+
+{{define "job_status"}}<span id="job-{{.Key}}" class="job-status"
+  {{if .Running}}hx-get="/protected/{{.Key}}/status" hx-trigger="load delay:2s" hx-swap="outerHTML"{{end}}>
+  {{if .Running}}<span class="spin">working…</span>{{end}}
+  <span class="counts">{{.Protected}} protected{{if .Revealed}} · {{.Revealed}} revealed{{end}}</span>
+  {{if .Message}}<span class="ok-msg">{{.Message}}</span>{{end}}
+</span>{{end}}

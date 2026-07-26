@@ -1,0 +1,117 @@
+{{define "setup.html"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>spoilarr · setup</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">spoil<span class="brand-accent">arr</span></a>
+    <span class="tagline">setup</span>
+  </header>
+
+  <main class="container">
+    <div class="card">
+      <h1>Connect to Plex</h1>
+      <div id="wizard">
+        {{if eq .Step "auth"}}{{template "setup_auth" .}}
+        {{else if eq .Step "server"}}{{template "setup_server" .}}
+        {{else if eq .Step "done"}}{{template "setup_done" .}}
+        {{end}}
+      </div>
+    </div>
+  </main>
+</body>
+</html>{{end}}
+
+{{define "setup_auth"}}
+<p class="muted">Sign in with your Plex account to authorize spoilarr. This is only
+needed once.</p>
+<button hx-post="/setup/pin" hx-target="#wizard" hx-swap="innerHTML">Sign in with Plex</button>
+{{end}}
+
+{{define "setup_pin_pending"}}
+<p>Click the button to authorize spoilarr in Plex, then come back to this tab.</p>
+<p><a class="btn" href="{{.AuthURL}}" target="_blank" rel="noopener">Authorize in Plex ↗</a></p>
+{{template "setup_poll" .}}
+{{end}}
+
+{{define "setup_poll"}}
+<div id="poll" hx-get="/setup/pin/status" hx-trigger="every 2s" hx-swap="outerHTML">
+  <p class="muted">Waiting for authorization…</p>
+</div>
+{{end}}
+
+{{define "setup_server"}}
+<p class="muted">Choose the server to protect. spoilarr only lists servers you own,
+since it can't lock metadata on shared ones.</p>
+<form hx-post="/setup/server" hx-target="#wizard" hx-swap="innerHTML">
+  {{range .Servers}}
+    {{$name := .Name}}
+    {{$best := .Best}}
+    <fieldset class="server-group">
+      <legend>{{.Name}}</legend>
+      <label class="conn-radio">
+        <input type="radio" name="choice" value="{{$name}}|{{$best.URI}}" checked required>
+        <span class="conn-label">{{$best.Label}} <span class="conn-best">recommended</span></span>
+        <span class="conn-detail">{{$best.Detail}}</span>
+      </label>
+      {{if gt (len .Conns) 1}}
+        <details class="more-conns">
+          <summary>Other connections</summary>
+          {{range $i, $c := .Conns}}{{if gt $i 0}}
+            <label class="conn-radio">
+              <input type="radio" name="choice" value="{{$name}}|{{$c.URI}}" required>
+              <span class="conn-label">{{$c.Label}}</span>
+              <span class="conn-detail">{{$c.Detail}}</span>
+            </label>
+          {{end}}{{end}}
+        </details>
+      {{end}}
+    </fieldset>
+  {{else}}
+    <p class="muted">No servers you own were found. Enter the URL manually below.</p>
+  {{end}}
+  <details {{if not .Servers}}open{{end}}>
+    <summary>Enter a server URL manually</summary>
+    <div class="manual">
+      <label>Server URL<br><input type="text" name="manual_url" placeholder="http://10.0.0.5:32400"></label>
+      <label>Name<br><input type="text" name="manual_name" placeholder="My Plex"></label>
+    </div>
+  </details>
+  <button type="submit">Connect</button>
+</form>
+{{end}}
+
+{{define "setup_server_error"}}
+<p class="error">Couldn't reach that server: {{.Error}}</p>
+<p><button hx-get="/setup" hx-target="body" hx-swap="outerHTML">Try again</button></p>
+{{end}}
+
+{{define "setup_done"}}
+<p class="ok-msg">✓ Connected to <strong>{{.ServerName}}</strong>{{if .Version}} (Plex {{.Version}}){{end}}.</p>
+<div class="webhook-box">
+  <h3>Enable instant protection (optional)</h3>
+  {{if .WebhookURL}}
+    <p class="muted">In Plex: <em>Settings → Webhooks → Add Webhook</em>, and paste this URL so new
+    episodes get protected the moment they're added:</p>
+    <code class="copy">{{.WebhookURL}}</code>
+    <p class="muted">This only needs to be reachable by your Plex server (same network) — not the
+    public internet. If Plex runs elsewhere, swap the host for one it can reach, or set
+    <code>SPOILARR_PUBLIC_URL</code>. Skipping this is fine: the poller still catches new episodes
+    within a few minutes.</p>
+  {{else}}
+    <p class="muted">A webhook URL for instant protection will appear here. The background poller
+    catches new episodes regardless.</p>
+  {{end}}
+</div>
+<p><a class="btn" href="/">Go to dashboard</a></p>
+{{end}}
+
+{{define "fragment_error"}}
+<p class="error">Something went wrong: {{.Error}}</p>
+<p><button hx-get="/setup" hx-target="body" hx-swap="outerHTML">Start over</button></p>
+{{end}}

@@ -1,0 +1,21 @@
+{{define "libraries.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · libraries</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <h1>Libraries</h1>
+  <p class="muted">Pick a library, then choose the shows and movies to protect.</p>
+  <div class="section-list">
+    {{range .Sections}}
+      <a class="section-card" href="/libraries/{{.Key}}">
+        <span class="section-title">{{.Title}}</span>
+        <span class="section-type">{{.Type}}</span>
+      </a>
+    {{else}}
+      <p class="muted">No show or movie libraries found on this server.</p>
+    {{end}}
+  </div>
+</main>
+</body>
+</html>{{end}}

@@ -1,0 +1,14 @@
+{{define "error.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · error</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <div class="card">
+    <h1>Something went wrong</h1>
+    <p class="error">{{.Error}}</p>
+    <p><a class="btn-secondary" href="/">Back to dashboard</a></p>
+  </div>
+</main>
+</body>
+</html>{{end}}

@@ -1,0 +1,35 @@
+{{define "section.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · browse</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <p><a href="/libraries" class="back">← Libraries</a></p>
+  <input class="filter" type="search" placeholder="Filter titles…" oninput="filterGrid(this.value)" autocomplete="off">
+  <div class="grid" id="grid">
+    {{range .Rows}}
+      <div class="tile" data-title="{{.Title}}">
+        <div class="poster">
+          {{if .Thumb}}<img loading="lazy" src="/plex/image?path={{.Thumb}}" alt="">{{else}}<span class="noart">no art</span>{{end}}
+        </div>
+        <div class="tile-body">
+          <div class="tile-title">{{.Title}}{{if .Year}} <span class="muted">({{.Year}})</span>{{end}}</div>
+          {{if eq .MediaType "show"}}<a class="seasons-link" href="/shows/{{.RatingKey}}?section={{.SectionID}}">Choose seasons →</a>{{end}}
+          {{template "protect_button" .}}
+        </div>
+      </div>
+    {{else}}
+      <p class="muted">This library is empty.</p>
+    {{end}}
+  </div>
+</main>
+<script>
+function filterGrid(q){
+  q = q.toLowerCase();
+  document.querySelectorAll('#grid .tile').forEach(function(t){
+    t.style.display = t.dataset.title.toLowerCase().indexOf(q) !== -1 ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>{{end}}

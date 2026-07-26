@@ -1,0 +1,59 @@
+{{define "show.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · {{.Title}}</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <p><a href="/libraries/{{.SectionID}}" class="back">← Back to library</a></p>
+  <div class="show-head">
+    <div class="show-poster">
+      {{if .Thumb}}<img src="/plex/image?path={{.Thumb}}" alt="">{{end}}
+    </div>
+    <div>
+      <h1>{{.Title}}</h1>
+      <p class="muted">Choose whether to protect the whole show or just specific seasons.</p>
+    </div>
+  </div>
+
+  <form hx-post="/protect-seasons" hx-target="#save-result" hx-swap="innerHTML" class="season-form">
+    <input type="hidden" name="show_key" value="{{.RatingKey}}">
+    <input type="hidden" name="section_id" value="{{.SectionID}}">
+    <input type="hidden" name="title" value="{{.Title}}">
+
+    <label class="whole-toggle">
+      <input type="checkbox" name="whole" value="1" id="whole" {{if .WholeShow}}checked{{end}}
+             onchange="document.querySelectorAll('.season-check').forEach(c=>{c.disabled=this.checked;});">
+      <strong>Protect entire show</strong> <span class="muted">(all current &amp; future seasons)</span>
+    </label>
+
+    <div class="season-grid">
+      {{range .Seasons}}
+        <label class="season-item">
+          <div class="season-poster">
+            {{if .Thumb}}<img loading="lazy" src="/plex/image?path={{.Thumb}}" alt="">{{end}}
+          </div>
+          <div class="season-pick">
+            <input class="season-check" type="checkbox" name="seasons" value="{{.Index}}"
+                   {{if .Selected}}checked{{end}} {{if $.WholeShow}}disabled{{end}}>
+            <span>{{.Title}}</span>
+          </div>
+        </label>
+      {{else}}
+        <p class="muted">This show has no seasons.</p>
+      {{end}}
+    </div>
+
+    <div class="season-actions">
+      <button type="submit">Save protection</button>
+      <span id="save-result" class="save-result"></span>
+    </div>
+  </form>
+</main>
+<script>
+// Reflect the initial disabled state on load.
+(function(){ var w=document.getElementById('whole'); if(w&&w.checked){document.querySelectorAll('.season-check').forEach(function(c){c.disabled=true;});} })();
+</script>
+</body>
+</html>{{end}}
+
+{{define "season_save_result"}}<span class="ok-msg">✓ {{.Message}}</span>{{end}}

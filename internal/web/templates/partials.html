@@ -1,0 +1,22 @@
+{{define "head"}}<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js"></script>{{end}}
+
+{{define "topbar"}}<header class="topbar">
+  <a class="brand" href="/">spoil<span class="brand-accent">arr</span></a>
+  <nav class="nav">
+    <a href="/libraries">Libraries</a>
+    <a href="/protected">Protected</a>
+    <a href="/setup">Connection</a>
+  </nav>
+</header>{{end}}
+
+{{define "protect_button"}}<form hx-post="{{if .Protected}}/unprotect{{else}}/protect{{end}}" hx-target="this" hx-swap="outerHTML" class="protect-form">
+  <input type="hidden" name="rating_key" value="{{.RatingKey}}">
+  <input type="hidden" name="section_id" value="{{.SectionID}}">
+  <input type="hidden" name="media_type" value="{{.MediaType}}">
+  <input type="hidden" name="title" value="{{.Title}}">
+  {{if .Protected}}<button type="submit" class="btn protected">Protected ✓</button>
+  {{else}}<button type="submit" class="btn-secondary">Protect</button>{{end}}
+</form>{{end}}
