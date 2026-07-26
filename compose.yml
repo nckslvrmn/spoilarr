@@ -10,8 +10,9 @@ services:
       # - SPOILARR_WEBHOOK_SECRET=${SPOILARR_WEBHOOK_SECRET}
       - SPOILARR_POLL_INTERVAL=5m
     volumes:
-      # Persistent SQLite DB + image backups. Named volume so redeploys keep data.
-      - spoilarr_data:/data
+      # Persistent SQLite DB + image backups. Bind mount on host persists
+      # data across restarts.
+      - /mnt/data/spoilarr:/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.spoilarr.rule=Host(`spoilarr.slvr.io`)"
@@ -23,6 +24,3 @@ services:
 networks:
   traefik:
     external: true
-
-volumes:
-  spoilarr_data:
