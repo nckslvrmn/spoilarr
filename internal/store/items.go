@@ -20,9 +20,11 @@ type ProtectedItem struct {
 // AddProtectedItem inserts a protected item with default profile/policy, or does
 // nothing if the rating key is already protected. Returns the row id.
 func (s *Store) AddProtectedItem(ratingKey, sectionID, mediaType, title string) error {
+	// New items inherit the global defaults: an empty profile and the "inherit"
+	// reveal policy both resolve to the defaults until the show is overridden.
 	_, err := s.db.Exec(
-		`INSERT INTO protected_items (rating_key, section_id, media_type, title)
-		 VALUES (?, ?, ?, ?)
+		`INSERT INTO protected_items (rating_key, section_id, media_type, title, profile, reveal_policy)
+		 VALUES (?, ?, ?, ?, '', 'inherit')
 		 ON CONFLICT(rating_key) DO NOTHING`,
 		ratingKey, sectionID, mediaType, title,
 	)

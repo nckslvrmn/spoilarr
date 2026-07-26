@@ -1,0 +1,28 @@
+services:
+  spoilarr:
+    image: ghcr.io/nckslvrmn/spoilarr:${SPOILARR_VERSION:-latest}
+    container_name: spoilarr
+    restart: always
+    environment:
+      # Everything else (Plex token/server, protected shows, settings) is
+      # configured in the web UI and stored in the /data volume.
+      # Optional: require a secret on the Plex webhook URL
+      # - SPOILARR_WEBHOOK_SECRET=${SPOILARR_WEBHOOK_SECRET}
+      - SPOILARR_POLL_INTERVAL=5m
+    volumes:
+      # Persistent SQLite DB + image backups. Named volume so redeploys keep data.
+      - spoilarr_data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spoilarr.rule=Host(`spoilarr.slvr.io`)"
+      - "traefik.http.routers.spoilarr.entrypoints=websecure"
+      - "traefik.http.services.spoilarr.loadbalancer.server.port=8484"
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  spoilarr_data:

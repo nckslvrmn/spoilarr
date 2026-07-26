@@ -21,9 +21,12 @@ const (
 // (watched, or N days past air date). Items already revealed are left alone so
 // they are not re-hidden. This is what the poller and webhooks drive.
 func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Result, error) {
-	prof := ParseProfile(pi.Profile)
+	r, err := p.buildResolver(pi)
+	if err != nil {
+		return Result{}, err
+	}
 	if pi.MediaType == "movie" {
-		return p.reconcileMovie(ctx, pi, prof)
+		return p.reconcileMovie(ctx, pi, r)
 	}
 
 	var res Result
@@ -36,6 +39,8 @@ func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Resu
 		if season.Type != "season" || (scope != nil && !scope[season.Index]) {
 			continue
 		}
+		prof := r.ProfileFor(season.Index)
+		policy, days := r.PolicyFor(season.Index)
 		if prof.SeasonPoster {
 			if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
 				p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
@@ -51,7 +56,7 @@ func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Resu
 			if ep.Type != "episode" {
 				continue
 			}
-			n, err := p.reconcileEpisode(ctx, pi, prof, ep)
+			n, err := p.reconcileEpisode(ctx, pi, prof, policy, days, ep)
 			if err != nil {
 				p.store.SetItemError(ep.RatingKey, err.Error())
 				res.Errors++
@@ -64,14 +69,15 @@ func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Resu
 	return res, nil
 }
 
-// reconcileEpisode protects a new episode or reveals a protected one per policy.
-func (p *Processor) reconcileEpisode(ctx context.Context, pi store.ProtectedItem, prof Profile, ep plex.MediaItem) (Result, error) {
+// reconcileEpisode protects a new episode or reveals a protected one per the
+// effective (possibly season-overridden) reveal policy.
+func (p *Processor) reconcileEpisode(ctx context.Context, pi store.ProtectedItem, prof Profile, policy string, days int, ep plex.MediaItem) (Result, error) {
 	var res Result
 	st, ok, err := p.store.GetItemState(ep.RatingKey)
 	if err != nil {
 		return res, err
 	}
-	reveal := shouldReveal(pi, ep)
+	reveal := shouldReveal(policy, days, ep)
 
 	switch {
 	case !ok:
@@ -91,20 +97,21 @@ func (p *Processor) reconcileEpisode(ctx context.Context, pi store.ProtectedItem
 	return res, nil
 }
 
-func (p *Processor) reconcileMovie(ctx context.Context, pi store.ProtectedItem, prof Profile) (Result, error) {
+func (p *Processor) reconcileMovie(ctx context.Context, pi store.ProtectedItem, r Resolver) (Result, error) {
 	var res Result
 	movie, err := p.plex.Item(ctx, pi.RatingKey)
 	if err != nil {
 		return res, err
 	}
+	policy, days := r.PolicyFor(0)
 	st, ok, _ := p.store.GetItemState(pi.RatingKey)
-	reveal := shouldReveal(pi, *movie)
+	reveal := shouldReveal(policy, days, *movie)
 	switch {
 	case !ok:
 		if reveal {
 			return res, nil
 		}
-		return p.protectMovie(ctx, pi, prof)
+		return p.protectMovie(ctx, pi, r.ProfileFor(0))
 	case st.State == store.StateProtected && reveal:
 		if err := p.revealItem(ctx, pi, st); err != nil {
 			return res, err
@@ -114,9 +121,9 @@ func (p *Processor) reconcileMovie(ctx context.Context, pi store.ProtectedItem, 
 	return res, nil
 }
 
-// shouldReveal evaluates a protected item's reveal policy against an episode/movie.
-func shouldReveal(pi store.ProtectedItem, m plex.MediaItem) bool {
-	switch pi.RevealPolicy {
+// shouldReveal evaluates a reveal policy against an episode/movie.
+func shouldReveal(policy string, days int, m plex.MediaItem) bool {
+	switch policy {
 	case RevealOnWatched:
 		return m.Watched()
 	case RevealAfterDays:
@@ -124,8 +131,8 @@ func shouldReveal(pi store.ProtectedItem, m plex.MediaItem) bool {
 		if ad.IsZero() {
 			return false
 		}
-		return time.Since(ad) >= time.Duration(pi.RevealDays)*24*time.Hour
-	default: // never, manual
+		return time.Since(ad) >= time.Duration(days)*24*time.Hour
+	default: // never, manual, inherit-resolved-to-those
 		return false
 	}
 }

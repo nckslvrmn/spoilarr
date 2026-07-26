@@ -239,3 +239,28 @@ code.copy { display: block; padding: 10px 12px; overflow-x: auto; word-break: br
 .job-status .ok-msg { font-size: 12px; margin-left: 8px; }
 .spin { color: var(--accent); margin-right: 6px; }
 .spin::before { content: "⟳ "; }
+
+/* settings source toggle + season overrides */
+.source-toggle { display: flex; gap: 20px; margin-bottom: 16px; }
+.source-toggle .radio { color: var(--text); }
+.season-ov {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 10px;
+}
+.season-ov > summary { font-weight: 600; }
+.season-form { margin-top: 12px; }
+.ov-badge {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; margin-left: 6px;
+}
+.ov-badge.on { color: var(--accent); border-color: var(--accent); }
+
+/* danger zone */
+.card.danger { border-color: rgba(229,83,75,0.5); }
+.card.danger h2 { color: var(--danger); margin-top: 0; }
+.mode-set { border: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.mode-set .radio { color: var(--text); }
+.btn-danger { background: var(--danger); color: #fff; }
+.card.danger label.check { color: var(--text); margin-bottom: 6px; display: flex; gap: 8px; align-items: center; }
+
+.hint { color: var(--muted); font-size: 13px; margin: 4px 0 16px; }

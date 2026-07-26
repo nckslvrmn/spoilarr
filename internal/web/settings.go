@@ -9,10 +9,21 @@ import (
 	"time"
 
 	"github.com/nckslvrmn/spoilarr/internal/protect"
+	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
+// seasonView is one season's row on the settings page.
+type seasonView struct {
+	Index      int
+	Title      string
+	Overridden bool
+	Profile    protect.Profile
+	Policy     string
+	Days       int
+}
+
 // handleItemSettings renders the spoiler profile + reveal policy editor for one
-// protected show/movie.
+// protected show/movie, including per-season override rows.
 func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
 	pi, ok, err := s.store.GetProtectedItem(ratingKey)
@@ -20,65 +31,155 @@ func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 		s.render(w, "error.html", map[string]any{"Error": "not a protected item"})
 		return
 	}
-	s.render(w, "settings.html", map[string]any{
-		"Item":    pi,
-		"Profile": protect.ParseProfile(pi.Profile),
-	})
+
+	defs, _ := s.store.GetDefaults()
+	overrides, _ := s.store.GetSeasonOverrides(pi.ID)
+	resolver := protect.NewResolver(defs, pi, overrides)
+
+	inheriting := pi.Profile == "" && (pi.RevealPolicy == "" || pi.RevealPolicy == protect.PolicyInherit)
+	// Effective show-level values for prefilling the form.
+	showProfile := resolver.ProfileFor(-1) // -1 has no override → show/default
+	showPolicy, showDays := resolver.PolicyFor(-1)
+
+	data := map[string]any{
+		"Item":         pi,
+		"Inheriting":   inheriting,
+		"Profile":      showProfile,
+		"RevealPolicy": showPolicy,
+		"RevealDays":   showDays,
+	}
+
+	// Season rows (shows only).
+	if pi.MediaType == "show" {
+		if client, err := s.plexClient(); err == nil {
+			if seasons, err := client.Children(r.Context(), ratingKey); err == nil {
+				scope := parseScopeSet(pi.SeasonScope)
+				var rows []seasonView
+				for _, se := range seasons {
+					if se.Type != "season" {
+						continue
+					}
+					if scope != nil && !scope[se.Index] {
+						continue
+					}
+					prof := resolver.ProfileFor(se.Index)
+					pol, days := resolver.PolicyFor(se.Index)
+					_, overridden := overrides[se.Index]
+					rows = append(rows, seasonView{
+						Index: se.Index, Title: se.Title, Overridden: overridden,
+						Profile: prof, Policy: pol, Days: days,
+					})
+				}
+				data["Seasons"] = rows
+			}
+		}
+	}
+	s.render(w, "settings.html", data)
 }
 
-// handleSaveSettings persists the edited profile + reveal policy.
+// parseScopeSet mirrors the processor's scope parsing for the settings view.
+func parseScopeSet(scope string) map[int]bool {
+	if scope == "" || scope == "all" {
+		return nil
+	}
+	var nums []int
+	if json.Unmarshal([]byte(scope), &nums) != nil || len(nums) == 0 {
+		return nil
+	}
+	set := map[int]bool{}
+	for _, n := range nums {
+		set[n] = true
+	}
+	return set
+}
+
+// profileFromForm builds a Profile from the standard settings form fields, using
+// an optional prefix (e.g. "s3_" for a season's fields).
+func profileFromForm(r *http.Request, prefix string) protect.Profile {
+	return protect.Profile{
+		Thumbnail:    r.FormValue(prefix + "thumbnail"),
+		BlurSigma:    parseFloat(r.FormValue(prefix+"blur_sigma"), 20),
+		Description:  r.FormValue(prefix + "description"),
+		DescTemplate: r.FormValue(prefix + "desc_template"),
+		TitleMode:    r.FormValue(prefix + "title_mode"),
+		SeasonPoster: r.FormValue(prefix+"season_poster") == "1",
+	}
+}
+
+// handleSaveSettings persists the show-level profile + reveal policy, or sets it
+// back to inheriting the global defaults.
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
 	if err := r.ParseForm(); err != nil {
 		s.fragmentError(w, "", err)
 		return
 	}
-	prof := protect.Profile{
-		Thumbnail:    r.FormValue("thumbnail"),
-		BlurSigma:    parseFloat(r.FormValue("blur_sigma"), 20),
-		Description:  r.FormValue("description"),
-		DescTemplate: r.FormValue("desc_template"),
-		TitleMode:    r.FormValue("title_mode"),
-		SeasonPoster: r.FormValue("season_poster") == "1",
+	if r.FormValue("source") == "inherit" {
+		if err := s.store.UpdateSettings(ratingKey, "", protect.PolicyInherit, 0); err != nil {
+			s.fragmentError(w, "", err)
+			return
+		}
+		s.render(w, "settings_saved", map[string]any{"Message": "This show now inherits the global defaults."})
+		return
 	}
-	blob, _ := json.Marshal(prof)
-
-	policy := r.FormValue("reveal_policy")
-	days := parseInt(r.FormValue("reveal_days"), 0)
-	if err := s.store.UpdateSettings(ratingKey, string(blob), policy, days); err != nil {
+	blob, _ := json.Marshal(profileFromForm(r, ""))
+	if err := s.store.UpdateSettings(ratingKey, string(blob), r.FormValue("reveal_policy"), parseInt(r.FormValue("reveal_days"), 0)); err != nil {
 		s.fragmentError(w, "", err)
 		return
 	}
 	s.render(w, "settings_saved", map[string]any{
-		"Message": "Settings saved. New changes apply as episodes are processed — use “Re-apply” to update already-protected items.",
+		"Message": "Settings saved. Use “Re-apply” to update already-protected episodes.",
 	})
+}
+
+// handleSaveSeasonOverride upserts a per-season override.
+func (s *Server) handleSaveSeasonOverride(w http.ResponseWriter, r *http.Request) {
+	pi, ok, _ := s.store.GetProtectedItem(r.PathValue("ratingKey"))
+	if !ok {
+		s.fragmentError(w, "", fmt.Errorf("item not found"))
+		return
+	}
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+	r.ParseForm()
+	blob, _ := json.Marshal(profileFromForm(r, ""))
+	profStr := string(blob)
+	policy := r.FormValue("reveal_policy")
+	if err := s.store.SetSeasonOverride(pi.ID, store.SeasonOverride{
+		SeasonIndex:  idx,
+		Profile:      &profStr,
+		RevealPolicy: &policy,
+		RevealDays:   parseInt(r.FormValue("reveal_days"), 0),
+	}); err != nil {
+		s.fragmentError(w, "", err)
+		return
+	}
+	s.render(w, "settings_saved", map[string]any{"Message": fmt.Sprintf("Season %d override saved.", idx)})
+}
+
+// handleResetSeasonOverride removes a season override so it inherits the show.
+func (s *Server) handleResetSeasonOverride(w http.ResponseWriter, r *http.Request) {
+	pi, ok, _ := s.store.GetProtectedItem(r.PathValue("ratingKey"))
+	if !ok {
+		s.fragmentError(w, "", fmt.Errorf("item not found"))
+		return
+	}
+	idx, _ := strconv.Atoi(r.PathValue("index"))
+	if err := s.store.DeleteSeasonOverride(pi.ID, idx); err != nil {
+		s.fragmentError(w, "", err)
+		return
+	}
+	s.render(w, "settings_saved", map[string]any{"Message": fmt.Sprintf("Season %d back to inheriting the show.", idx)})
 }
 
 // handleReapply reveals then re-protects an item so profile changes take effect
 // on already-processed episodes. Backups on disk keep the originals intact.
 func (s *Server) handleReapply(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
-	// Persist whatever is in the form first, so re-apply uses the latest settings.
-	if err := r.ParseForm(); err == nil {
-		prof := protect.Profile{
-			Thumbnail:    r.FormValue("thumbnail"),
-			BlurSigma:    parseFloat(r.FormValue("blur_sigma"), 20),
-			Description:  r.FormValue("description"),
-			DescTemplate: r.FormValue("desc_template"),
-			TitleMode:    r.FormValue("title_mode"),
-			SeasonPoster: r.FormValue("season_poster") == "1",
-		}
-		blob, _ := json.Marshal(prof)
-		s.store.UpdateSettings(ratingKey, string(blob), r.FormValue("reveal_policy"), parseInt(r.FormValue("reveal_days"), 0))
-	}
-
 	pi, ok, err := s.store.GetProtectedItem(ratingKey)
 	if err != nil || !ok {
 		s.fragmentError(w, "", fmt.Errorf("item not found"))
 		return
 	}
-	// Reveal-then-reprotect can be lengthy on a big show; run it in the background
-	// and report progress via the item status fragment.
 	s.jobs.start(ratingKey, func() string {
 		proc, err := s.processor()
 		if err != nil {

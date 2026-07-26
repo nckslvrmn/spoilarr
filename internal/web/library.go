@@ -68,7 +68,9 @@ func (s *Server) handleSection(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleProtect adds an item to the protected set and returns its toggle button.
+// handleProtect enrolls an item and immediately applies protection in the
+// background, so checking the box actually does something visible rather than
+// just waiting for the next poll.
 func (s *Server) handleProtect(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	ratingKey := r.FormValue("rating_key")
@@ -76,15 +78,25 @@ func (s *Server) handleProtect(w http.ResponseWriter, r *http.Request) {
 		s.fragmentError(w, "", err)
 		return
 	}
+	if pi, ok, _ := s.store.GetProtectedItem(ratingKey); ok {
+		s.jobs.start(ratingKey, func() string { return s.runProtect(pi) })
+	}
 	s.renderToggle(w, r, true)
 }
 
-// handleUnprotect removes an item from the protected set and returns its button.
+// handleUnprotect reveals everything first (restoring originals while the
+// backups still exist), then removes the item, all in the background.
 func (s *Server) handleUnprotect(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	if err := s.store.RemoveProtectedItem(r.FormValue("rating_key")); err != nil {
-		s.fragmentError(w, "", err)
-		return
+	ratingKey := r.FormValue("rating_key")
+	if pi, ok, _ := s.store.GetProtectedItem(ratingKey); ok {
+		s.jobs.start(ratingKey, func() string {
+			msg := s.runReveal(pi)
+			if err := s.store.RemoveProtectedItem(ratingKey); err != nil {
+				return "reveal ok but remove failed: " + err.Error()
+			}
+			return msg + ", protection removed"
+		})
 	}
 	s.renderToggle(w, r, false)
 }

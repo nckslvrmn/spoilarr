@@ -5,6 +5,7 @@
 {{template "topbar" .}}
 <main class="container">
   <p><a href="/libraries" class="back">← Libraries</a></p>
+  <p class="hint">Protecting applies in the background right away (and reveals automatically if you un-protect). Track progress on the <a href="/protected">Protected</a> page.</p>
   <input class="filter" type="search" placeholder="Filter titles…" oninput="filterGrid(this.value)" autocomplete="off">
   <div class="grid" id="grid">
     {{range .Rows}}

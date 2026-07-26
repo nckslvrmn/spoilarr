@@ -48,6 +48,18 @@ var migrations = []string{
 	);`,
 	`CREATE INDEX idx_item_state_parent ON item_state(parent_show_key);`,
 	`CREATE INDEX idx_item_state_state  ON item_state(state);`,
+
+	// 0004 — per-season overrides. A NULL profile/reveal_policy means "inherit
+	// from the show" (which may itself inherit the global defaults).
+	`CREATE TABLE season_overrides (
+		id                INTEGER PRIMARY KEY,
+		protected_item_id INTEGER NOT NULL REFERENCES protected_items(id) ON DELETE CASCADE,
+		season_index      INTEGER NOT NULL,
+		profile           TEXT,
+		reveal_policy     TEXT,
+		reveal_days       INTEGER NOT NULL DEFAULT 0,
+		UNIQUE(protected_item_id, season_index)
+	);`,
 }
 
 // migrate applies any migrations not yet recorded in schema_version.

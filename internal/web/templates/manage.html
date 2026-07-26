@@ -1,0 +1,41 @@
+{{define "manage.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · manage</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <h1>Manage connection</h1>
+
+  <div class="card">
+    <p>Connected to <strong>{{.ServerName}}</strong> · {{.ProtectedCount}} protected item(s).</p>
+    <div class="action-row">
+      <button hx-post="/reveal-all" hx-target="#manage-status" hx-swap="outerHTML">Reveal everything now</button>
+    </div>
+    <span id="manage-status" class="job-status"
+      {{if .Running}}hx-get="/manage/status" hx-trigger="load delay:2s" hx-swap="outerHTML"{{end}}>
+      {{if .Running}}<span class="spin">working…</span>{{else if .Message}}<span class="ok-msg">{{.Message}}</span>{{end}}
+    </span>
+    <p class="muted">Restores every protected show/movie to its originals without un-enrolling them.</p>
+  </div>
+
+  <div class="card danger">
+    <h2>Disconnect &amp; reset</h2>
+    <form method="post" action="/disconnect" onsubmit="return confirm('Disconnect from Plex now?');">
+      <label class="check"><input type="checkbox" name="reveal" checked> Reveal everything first <span class="muted">(recommended)</span></label>
+      <fieldset class="mode-set">
+        <label class="radio"><input type="radio" name="mode" value="keep" checked> Keep my data <span class="muted">— reconnecting later restores protected shows, settings and backups</span></label>
+        <label class="radio"><input type="radio" name="mode" value="reset"> Delete everything <span class="muted">— wipes the database and image backups, fresh start</span></label>
+      </fieldset>
+      <button type="submit" class="btn-danger">Disconnect</button>
+    </form>
+    <p class="muted">Reveal first so nothing is left blurred/locked in Plex with the backups gone. Deleting
+    without revealing means those items stay modified in Plex and can't be restored by spoilarr.</p>
+  </div>
+</main>
+</body>
+</html>{{end}}
+
+{{define "manage_status"}}<span id="manage-status" class="job-status"
+  {{if .Running}}hx-get="/manage/status" hx-trigger="load delay:2s" hx-swap="outerHTML"{{end}}>
+  {{if .Running}}<span class="spin">working…</span>{{else if .Message}}<span class="ok-msg">{{.Message}}</span>{{end}}
+</span>{{end}}

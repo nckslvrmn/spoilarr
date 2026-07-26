@@ -1,0 +1,14 @@
+.git
+.github
+.claude
+.DS_Store
+.env
+.env.*
+*.log
+coverage
+coverage.*
+dist
+bin
+tmp
+spoilarr
+data

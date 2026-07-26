@@ -19,10 +19,12 @@ The reveal policies are the part I care about most. Mine is set to `never`, so p
 ```sh
 # local
 go run ./cmd/spoilarr      # http://localhost:8484, data in ./data
-
-# container
-docker compose up --build  # same thing, data in ./data
 ```
+
+For the homelab I run the published image via `compose.yml`, which pulls
+`ghcr.io/nckslvrmn/spoilarr` and keeps the DB + image backups on the `spoilarr_data`
+volume. Cutting a GitHub release builds and pushes the image, then the self-hosted
+runner redeploys the compose stack (there's also a manual "Deploy To Home" workflow).
 
 ## Config
 

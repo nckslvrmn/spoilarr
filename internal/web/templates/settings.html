@@ -9,78 +9,107 @@
   <p class="muted">{{.Item.MediaType}}{{if eq .Item.MediaType "show"}} · <a href="/shows/{{.Item.RatingKey}}?section={{.Item.SectionID}}">change seasons</a>{{end}}</p>
 
   <form hx-post="/protected/{{.Item.RatingKey}}/settings" hx-target="#settings-result" hx-swap="innerHTML" class="settings-form">
-    <fieldset>
-      <legend>Thumbnail</legend>
-      <label>Mode
-        <select name="thumbnail">
-          <option value="blur" {{if eq .Profile.Thumbnail "blur"}}selected{{end}}>Blur</option>
-          <option value="generated" {{if eq .Profile.Thumbnail "generated"}}selected{{end}}>Generated card</option>
-          <option value="solid" {{if eq .Profile.Thumbnail "solid"}}selected{{end}}>Solid color</option>
-          <option value="leave" {{if eq .Profile.Thumbnail "leave"}}selected{{end}}>Leave unchanged</option>
-        </select>
-      </label>
-      <label>Blur strength
-        <input type="number" name="blur_sigma" min="4" max="50" step="1" value="{{printf "%.0f" .Profile.BlurSigma}}">
-      </label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Description</legend>
-      <label>Mode
-        <select name="description" id="desc-mode" onchange="toggle()">
-          <option value="clear" {{if eq .Profile.Description "clear"}}selected{{end}}>Clear it</option>
-          <option value="template" {{if eq .Profile.Description "template"}}selected{{end}}>Replace with text</option>
-          <option value="leave" {{if eq .Profile.Description "leave"}}selected{{end}}>Leave unchanged</option>
-        </select>
-      </label>
-      <label id="desc-tmpl-row">Replacement text <span class="muted">(placeholders: {show} {season} {episode})</span>
-        <input type="text" name="desc_template" value="{{.Profile.DescTemplate}}">
-      </label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Episode title</legend>
-      <label>Mode
-        <select name="title_mode">
-          <option value="episode_number" {{if eq .Profile.TitleMode "episode_number"}}selected{{end}}>Episode number ("Episode 3")</option>
-          <option value="letters" {{if eq .Profile.TitleMode "letters"}}selected{{end}}>Letters ("Episode C")</option>
-          <option value="generic" {{if eq .Profile.TitleMode "generic"}}selected{{end}}>Generic ("Episode")</option>
-          <option value="keep" {{if eq .Profile.TitleMode "keep"}}selected{{end}}>Keep original</option>
-        </select>
-      </label>
-      <label class="check"><input type="checkbox" name="season_poster" value="1" {{if .Profile.SeasonPoster}}checked{{end}}> Also protect season posters</label>
-    </fieldset>
-
-    <fieldset>
-      <legend>Reveal policy</legend>
-      <label>When to un-hide
-        <select name="reveal_policy" id="reveal-policy" onchange="toggle()">
-          <option value="never" {{if eq .Item.RevealPolicy "never"}}selected{{end}}>Never (stay hidden until I reveal)</option>
-          <option value="on_watched" {{if eq .Item.RevealPolicy "on_watched"}}selected{{end}}>Once watched</option>
-          <option value="after_days" {{if eq .Item.RevealPolicy "after_days"}}selected{{end}}>A number of days after air date</option>
-          <option value="manual" {{if eq .Item.RevealPolicy "manual"}}selected{{end}}>Manual only</option>
-        </select>
-      </label>
-      <label id="reveal-days-row">Days <input type="number" name="reveal_days" min="0" max="365" value="{{.Item.RevealDays}}"></label>
-    </fieldset>
-
+    <div class="source-toggle">
+      <label class="radio"><input type="radio" name="source" value="inherit" {{if .Inheriting}}checked{{end}} onchange="togSource(this)"> Inherit <a href="/defaults">global defaults</a></label>
+      <label class="radio"><input type="radio" name="source" value="custom" {{if not .Inheriting}}checked{{end}} onchange="togSource(this)"> Customize this show</label>
+    </div>
+    <div class="custom-fields" {{if .Inheriting}}style="display:none"{{end}}>
+      {{template "profile_fields" (fieldsData .Profile .RevealPolicy .RevealDays)}}
+    </div>
     <div class="settings-actions">
-      <button type="submit">Save settings</button>
+      <button type="submit">Save</button>
       <button type="button" class="btn-secondary" hx-post="/protected/{{.Item.RatingKey}}/reapply" hx-target="#settings-result" hx-swap="innerHTML">Save &amp; re-apply now</button>
       <span id="settings-result" class="save-result"></span>
     </div>
   </form>
+
+  {{if .Seasons}}
+    <h2>Per-season overrides</h2>
+    <p class="muted">By default each season follows this show. Override one to give it its own look or reveal rule (e.g. the current season stays hidden while older ones reveal once watched).</p>
+    {{$key := .Item.RatingKey}}
+    {{range .Seasons}}
+      <details class="season-ov" {{if .Overridden}}open{{end}}>
+        <summary>Season {{.Index}}{{if .Title}} · {{.Title}}{{end}} <span class="ov-badge {{if .Overridden}}on{{end}}">{{if .Overridden}}overridden{{else}}inherits show{{end}}</span></summary>
+        <form hx-post="/protected/{{$key}}/season/{{.Index}}" hx-target="find .ov-result" hx-swap="innerHTML" class="settings-form season-form">
+          {{template "profile_fields" (fieldsData .Profile .Policy .Days)}}
+          <div class="settings-actions">
+            <button type="submit">Save override</button>
+            <button type="button" class="btn-ghost" hx-post="/protected/{{$key}}/season/{{.Index}}/reset" hx-target="find .ov-result" hx-swap="innerHTML">Reset to show</button>
+            <span class="ov-result save-result"></span>
+          </div>
+        </form>
+      </details>
+    {{end}}
+  {{end}}
 </main>
 <script>
-function toggle(){
-  var d=document.getElementById('desc-mode').value;
-  document.getElementById('desc-tmpl-row').style.display = d==='template' ? '' : 'none';
-  var p=document.getElementById('reveal-policy').value;
-  document.getElementById('reveal-days-row').style.display = p==='after_days' ? '' : 'none';
+function tog(el){
+  var f = el.closest('form');
+  var d = f.querySelector('.desc-mode'); var dr = f.querySelector('.desc-tmpl-row');
+  if (d && dr) dr.style.display = d.value === 'template' ? '' : 'none';
+  var p = f.querySelector('.reveal-policy'); var pr = f.querySelector('.reveal-days-row');
+  if (p && pr) pr.style.display = p.value === 'after_days' ? '' : 'none';
 }
-toggle();
+function togSource(el){
+  var f = el.closest('form');
+  f.querySelector('.custom-fields').style.display = el.value === 'custom' ? '' : 'none';
+}
+document.querySelectorAll('.settings-form').forEach(function(f){
+  var d = f.querySelector('.desc-mode'); if (d) tog(d);
+});
 </script>
 </body>
 </html>{{end}}
+
+{{define "profile_fields"}}
+<fieldset>
+  <legend>Thumbnail</legend>
+  <label>Mode
+    <select name="thumbnail">
+      <option value="blur" {{if eq .Profile.Thumbnail "blur"}}selected{{end}}>Blur</option>
+      <option value="generated" {{if eq .Profile.Thumbnail "generated"}}selected{{end}}>Generated card</option>
+      <option value="solid" {{if eq .Profile.Thumbnail "solid"}}selected{{end}}>Solid color</option>
+      <option value="leave" {{if eq .Profile.Thumbnail "leave"}}selected{{end}}>Leave unchanged</option>
+    </select>
+  </label>
+  <label>Blur strength <input type="number" name="blur_sigma" min="4" max="50" step="1" value="{{printf "%.0f" .Profile.BlurSigma}}"></label>
+</fieldset>
+<fieldset>
+  <legend>Description</legend>
+  <label>Mode
+    <select name="description" class="desc-mode" onchange="tog(this)">
+      <option value="clear" {{if eq .Profile.Description "clear"}}selected{{end}}>Clear it</option>
+      <option value="template" {{if eq .Profile.Description "template"}}selected{{end}}>Replace with text</option>
+      <option value="leave" {{if eq .Profile.Description "leave"}}selected{{end}}>Leave unchanged</option>
+    </select>
+  </label>
+  <label class="desc-tmpl-row">Replacement text <span class="muted">({show} {season} {episode})</span>
+    <input type="text" name="desc_template" value="{{.Profile.DescTemplate}}"></label>
+</fieldset>
+<fieldset>
+  <legend>Episode title</legend>
+  <label>Mode
+    <select name="title_mode">
+      <option value="episode_number" {{if eq .Profile.TitleMode "episode_number"}}selected{{end}}>Episode number ("Episode 3")</option>
+      <option value="letters" {{if eq .Profile.TitleMode "letters"}}selected{{end}}>Letters ("Episode C")</option>
+      <option value="generic" {{if eq .Profile.TitleMode "generic"}}selected{{end}}>Generic ("Episode")</option>
+      <option value="keep" {{if eq .Profile.TitleMode "keep"}}selected{{end}}>Keep original</option>
+    </select>
+  </label>
+  <label class="check"><input type="checkbox" name="season_poster" value="1" {{if .Profile.SeasonPoster}}checked{{end}}> Also protect season posters</label>
+</fieldset>
+<fieldset>
+  <legend>Reveal policy</legend>
+  <label>When to un-hide
+    <select name="reveal_policy" class="reveal-policy" onchange="tog(this)">
+      <option value="never" {{if eq .Policy "never"}}selected{{end}}>Never (stay hidden until I reveal)</option>
+      <option value="on_watched" {{if eq .Policy "on_watched"}}selected{{end}}>Once watched</option>
+      <option value="after_days" {{if eq .Policy "after_days"}}selected{{end}}>A number of days after air date</option>
+      <option value="manual" {{if eq .Policy "manual"}}selected{{end}}>Manual only</option>
+    </select>
+  </label>
+  <label class="reveal-days-row">Days <input type="number" name="reveal_days" min="0" max="365" value="{{.Days}}"></label>
+</fieldset>
+{{end}}
 
 {{define "settings_saved"}}<span class="ok-msg">✓ {{.Message}}</span>{{end}}

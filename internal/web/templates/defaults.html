@@ -1,0 +1,81 @@
+{{define "defaults.html"}}<!doctype html>
+<html lang="en">
+<head><title>spoilarr · defaults</title>{{template "head" .}}</head>
+<body>
+{{template "topbar" .}}
+<main class="container">
+  <h1>Default protection</h1>
+  <p class="muted">These apply to every protected show and season that hasn't set its own override.
+  Change them here and they flow through everywhere that inherits.</p>
+
+  <form hx-post="/defaults" hx-target="#settings-result" hx-swap="innerHTML" class="settings-form">
+    <fieldset>
+      <legend>Thumbnail</legend>
+      <label>Mode
+        <select name="thumbnail">
+          <option value="blur" {{if eq .Profile.Thumbnail "blur"}}selected{{end}}>Blur</option>
+          <option value="generated" {{if eq .Profile.Thumbnail "generated"}}selected{{end}}>Generated card</option>
+          <option value="solid" {{if eq .Profile.Thumbnail "solid"}}selected{{end}}>Solid color</option>
+          <option value="leave" {{if eq .Profile.Thumbnail "leave"}}selected{{end}}>Leave unchanged</option>
+        </select>
+      </label>
+      <label>Blur strength
+        <input type="number" name="blur_sigma" min="4" max="50" step="1" value="{{printf "%.0f" .Profile.BlurSigma}}">
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Description</legend>
+      <label>Mode
+        <select name="description" id="desc-mode" onchange="toggle()">
+          <option value="clear" {{if eq .Profile.Description "clear"}}selected{{end}}>Clear it</option>
+          <option value="template" {{if eq .Profile.Description "template"}}selected{{end}}>Replace with text</option>
+          <option value="leave" {{if eq .Profile.Description "leave"}}selected{{end}}>Leave unchanged</option>
+        </select>
+      </label>
+      <label id="desc-tmpl-row">Replacement text <span class="muted">(placeholders: {show} {season} {episode})</span>
+        <input type="text" name="desc_template" value="{{.Profile.DescTemplate}}">
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Episode title</legend>
+      <label>Mode
+        <select name="title_mode">
+          <option value="episode_number" {{if eq .Profile.TitleMode "episode_number"}}selected{{end}}>Episode number ("Episode 3")</option>
+          <option value="letters" {{if eq .Profile.TitleMode "letters"}}selected{{end}}>Letters ("Episode C")</option>
+          <option value="generic" {{if eq .Profile.TitleMode "generic"}}selected{{end}}>Generic ("Episode")</option>
+          <option value="keep" {{if eq .Profile.TitleMode "keep"}}selected{{end}}>Keep original</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="season_poster" value="1" {{if .Profile.SeasonPoster}}checked{{end}}> Also protect season posters</label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Reveal policy</legend>
+      <label>When to un-hide
+        <select name="reveal_policy" id="reveal-policy" onchange="toggle()">
+          <option value="never" {{if eq .RevealPolicy "never"}}selected{{end}}>Never (stay hidden until I reveal)</option>
+          <option value="on_watched" {{if eq .RevealPolicy "on_watched"}}selected{{end}}>Once watched</option>
+          <option value="after_days" {{if eq .RevealPolicy "after_days"}}selected{{end}}>A number of days after air date</option>
+          <option value="manual" {{if eq .RevealPolicy "manual"}}selected{{end}}>Manual only</option>
+        </select>
+      </label>
+      <label id="reveal-days-row">Days <input type="number" name="reveal_days" min="0" max="365" value="{{.RevealDays}}"></label>
+    </fieldset>
+
+    <div class="settings-actions">
+      <button type="submit">Save defaults</button>
+      <span id="settings-result" class="save-result"></span>
+    </div>
+  </form>
+</main>
+<script>
+function toggle(){
+  document.getElementById('desc-tmpl-row').style.display = document.getElementById('desc-mode').value==='template' ? '' : 'none';
+  document.getElementById('reveal-days-row').style.display = document.getElementById('reveal-policy').value==='after_days' ? '' : 'none';
+}
+toggle();
+</script>
+</body>
+</html>{{end}}

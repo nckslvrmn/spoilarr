@@ -31,11 +31,20 @@ type Server struct {
 
 // New constructs the HTTP server and parses templates.
 func New(cfg config.Config, st *store.Store, log *slog.Logger) (*Server, error) {
-	tmpl, err := template.New("").Funcs(template.FuncMap{"jobData": jobData}).ParseFS(templatesFS, "templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{
+		"jobData":    jobData,
+		"fieldsData": fieldsData,
+	}).ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
 		return nil, err
 	}
 	return &Server{cfg: cfg, store: st, log: log, tmpl: tmpl}, nil
+}
+
+// fieldsData packages a profile + reveal policy for the shared profile_fields
+// template fragment (used by the show form and each season override form).
+func fieldsData(profile any, policy string, days int) map[string]any {
+	return map[string]any{"Profile": profile, "Policy": policy, "Days": days}
 }
 
 // jobData builds the data map the job_status fragment expects, for use from
@@ -60,6 +69,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /setup/pin/status", s.handleSetupPINStatus)
 	mux.HandleFunc("POST /setup/server", s.handleSetupServer)
 
+	// Connection management, defaults, danger zone.
+	mux.HandleFunc("GET /manage", s.handleManage)
+	mux.HandleFunc("POST /reveal-all", s.handleRevealAll)
+	mux.HandleFunc("GET /manage/status", s.handleManageStatus)
+	mux.HandleFunc("POST /disconnect", s.handleDisconnect)
+	mux.HandleFunc("GET /defaults", s.handleDefaults)
+	mux.HandleFunc("POST /defaults", s.handleSaveDefaults)
+
 	// Library browsing and protect/unprotect.
 	mux.HandleFunc("GET /libraries", s.handleLibraries)
 	mux.HandleFunc("GET /libraries/{section}", s.handleSection)
@@ -78,6 +95,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /protected/{ratingKey}/status", s.handleItemStatus)
 	mux.HandleFunc("POST /protected/{ratingKey}/settings", s.handleSaveSettings)
 	mux.HandleFunc("POST /protected/{ratingKey}/reapply", s.handleReapply)
+	mux.HandleFunc("POST /protected/{ratingKey}/season/{index}", s.handleSaveSeasonOverride)
+	mux.HandleFunc("POST /protected/{ratingKey}/season/{index}/reset", s.handleResetSeasonOverride)
 
 	return s.withLogging(mux)
 }

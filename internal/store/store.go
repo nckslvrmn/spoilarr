@@ -63,3 +63,31 @@ func (s *Store) SetConfig(key, value string) error {
 	)
 	return err
 }
+
+// DeleteConfig removes config keys.
+func (s *Store) DeleteConfig(keys ...string) error {
+	for _, k := range keys {
+		if _, err := s.db.Exec(`DELETE FROM config WHERE key = ?`, k); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ResetData clears all protected items, their per-item state and season
+// overrides, and the global defaults, returning the app to a fresh state. The
+// Plex connection (token/server) and client id are left untouched.
+func (s *Store) ResetData() error {
+	stmts := []string{
+		`DELETE FROM season_overrides`,
+		`DELETE FROM item_state`,
+		`DELETE FROM protected_items`,
+		`DELETE FROM config WHERE key IN ('default_profile','default_reveal_policy','default_reveal_days','last_poll_at','last_poll_summary')`,
+	}
+	for _, q := range stmts {
+		if _, err := s.db.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}

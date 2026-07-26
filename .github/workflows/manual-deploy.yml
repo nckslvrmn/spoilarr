@@ -1,0 +1,22 @@
+name: Deploy To Home
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Image version tag (e.g. v1.0.0)'
+        required: false
+        default: 'latest'
+
+jobs:
+  deploy:
+    runs-on: [self-hosted]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: nckslvrmn/docker-compose-deploy@main
+        with:
+          file: compose.yml
+        env:
+          SPOILARR_VERSION: ${{ inputs.version }}

@@ -55,16 +55,34 @@ type Result struct {
 	Errors    int
 }
 
-// ProtectOne protects a single opted-in show or movie according to its profile.
-func (p *Processor) ProtectOne(ctx context.Context, pi store.ProtectedItem) (Result, error) {
-	prof := ParseProfile(pi.Profile)
-	if pi.MediaType == "movie" {
-		return p.protectMovie(ctx, pi, prof)
+// buildResolver loads the inheritance context (global defaults + season
+// overrides) for a protected item.
+func (p *Processor) buildResolver(pi store.ProtectedItem) (Resolver, error) {
+	defs, err := p.store.GetDefaults()
+	if err != nil {
+		return Resolver{}, err
 	}
-	return p.protectShow(ctx, pi, prof)
+	overrides, err := p.store.GetSeasonOverrides(pi.ID)
+	if err != nil {
+		return Resolver{}, err
+	}
+	return NewResolver(defs, pi, overrides), nil
 }
 
-func (p *Processor) protectShow(ctx context.Context, pi store.ProtectedItem, prof Profile) (Result, error) {
+// ProtectOne protects a single opted-in show or movie, resolving each season's
+// effective profile through the defaults → show → season inheritance chain.
+func (p *Processor) ProtectOne(ctx context.Context, pi store.ProtectedItem) (Result, error) {
+	r, err := p.buildResolver(pi)
+	if err != nil {
+		return Result{}, err
+	}
+	if pi.MediaType == "movie" {
+		return p.protectMovie(ctx, pi, r.ProfileFor(0))
+	}
+	return p.protectShow(ctx, pi, r)
+}
+
+func (p *Processor) protectShow(ctx context.Context, pi store.ProtectedItem, r Resolver) (Result, error) {
 	var res Result
 	scope := parseScope(pi.SeasonScope)
 	seasons, err := p.plex.Children(ctx, pi.RatingKey)
@@ -78,6 +96,7 @@ func (p *Processor) protectShow(ctx context.Context, pi store.ProtectedItem, pro
 		if scope != nil && !scope[season.Index] {
 			continue // season not in the configured scope
 		}
+		prof := r.ProfileFor(season.Index)
 		if prof.SeasonPoster {
 			if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
 				p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
