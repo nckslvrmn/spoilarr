@@ -11,9 +11,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o spoilarr ./cmd/spoilarr
 # /data directory owned by that user so a mounted volume inherits write access.
 RUN mkdir -p /runtime/etc/ssl/certs /runtime/data /runtime/tmp && \
     cp /etc/ssl/certs/ca-certificates.crt /runtime/etc/ssl/certs/ca-certificates.crt && \
-    printf 'spoilarr:x:1000:1000:Spoilarr:/home/spoilarr:/sbin/nologin\n' > /runtime/etc/passwd && \
-    printf 'spoilarr:x:1000:\n' > /runtime/etc/group && \
-    chown -R 1000:1000 /runtime/data && \
+    printf 'spoilarr:x:911:911:Spoilarr:/home/spoilarr:/sbin/nologin\n' > /runtime/etc/passwd && \
+    printf 'spoilarr:x:911:\n' > /runtime/etc/group && \
+    chown -R 911:911 /runtime/data && \
     chmod 1777 /runtime/tmp
 
 FROM scratch
@@ -30,7 +30,7 @@ ENV SPOILARR_DATA_DIR=/data \
     TMPDIR=/tmp
 COPY --from=go-builder /runtime/ /
 COPY --from=go-builder --chmod=0755 /src/spoilarr /spoilarr
-USER 1000:1000
+USER 911:911
 EXPOSE 8484
 VOLUME ["/data"]
 ENTRYPOINT ["/spoilarr"]
