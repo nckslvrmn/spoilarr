@@ -6,7 +6,6 @@ import (
 	"strings"
 )
 
-// Connection is one reachable address for a Plex server.
 type Connection struct {
 	Protocol string `json:"protocol"`
 	Address  string `json:"address"`
@@ -16,8 +15,6 @@ type Connection struct {
 	Relay    bool   `json:"relay"`
 }
 
-// Resource is an entry from plex.tv's resources list. spoilarr cares about the
-// servers the account owns.
 type Resource struct {
 	Name             string       `json:"name"`
 	Product          string       `json:"product"`
@@ -28,15 +25,14 @@ type Resource struct {
 	Connections      []Connection `json:"connections"`
 }
 
-// ServerConn is a connection option presented to the user with a friendly label
-// instead of a raw plex.direct URI.
+// ServerConn is a connection shown to the user with a friendly label instead of
+// the raw plex.direct URI.
 type ServerConn struct {
 	URI    string // actual connect target (TLS hostname)
 	Label  string // "Local network" | "Remote" | "Relay"
 	Detail string // "192.168.1.61:32400"
 }
 
-// Server is a discovered, owned Plex Media Server with ranked connection options.
 type Server struct {
 	Name             string
 	ClientIdentifier string
@@ -44,7 +40,6 @@ type Server struct {
 	Conns            []ServerConn // best-first (local, then remote, then relay)
 }
 
-// Best returns the recommended connection (first after ranking).
 func (s Server) Best() ServerConn {
 	if len(s.Conns) == 0 {
 		return ServerConn{}
@@ -52,8 +47,8 @@ func (s Server) Best() ServerConn {
 	return s.Conns[0]
 }
 
-// ListServers returns the Plex Media Servers the signed-in account OWNS. Shared
-// servers are excluded — spoilarr can only lock metadata on servers you own.
+// ListServers excludes shared servers, since spoilarr can only lock metadata on
+// servers the account owns.
 func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	if c.Token == "" {
 		return nil, fmt.Errorf("list servers: not authenticated")
@@ -78,11 +73,10 @@ func (c *Client) ListServers(ctx context.Context) ([]Server, error) {
 	return servers, nil
 }
 
-// labelConnections ranks connections (local, remote, relay) and gives each a
-// friendly label + address:port detail, dropping the confusing raw URIs. Among
-// local addresses, real LAN ranges (192.168/10) are preferred over the 172.16/12
-// range that Docker bridge interfaces live in, so the recommended connection is
-// the one a browser can actually reach — not a container bridge IP.
+// labelConnections ranks connections and labels them, dropping the confusing raw
+// URIs. Real LAN ranges (192.168/10) beat the 172.16/12 range Docker bridges use,
+// so the recommended connection is one a browser can actually reach rather than a
+// container bridge IP.
 func labelConnections(conns []Connection) []ServerConn {
 	rank := func(c Connection) int {
 		category := 1 // remote direct
@@ -123,8 +117,8 @@ func labelConnections(conns []Connection) []ServerConn {
 	return out
 }
 
-// localScore orders local addresses so real LAN ranges beat Docker/other bridge
-// ranges. Lower is better. Only meaningful for local connections.
+// localScore ranks local addresses so real LAN ranges beat Docker/other bridges.
+// Lower is better.
 func localScore(c Connection) int {
 	if !c.Local {
 		return 0

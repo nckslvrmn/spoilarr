@@ -8,7 +8,7 @@ import (
 	"net/url"
 )
 
-// Metadata type codes used by the Plex edit endpoint.
+// Type codes the Plex edit endpoint expects.
 const (
 	TypeMovie   = 1
 	TypeShow    = 2
@@ -16,8 +16,7 @@ const (
 	TypeEpisode = 4
 )
 
-// Children returns the direct children of a metadata item: seasons of a show,
-// or episodes of a season.
+// Children returns seasons of a show, or episodes of a season.
 func (c *Client) Children(ctx context.Context, ratingKey string) ([]MediaItem, error) {
 	var out itemsResponse
 	u := fmt.Sprintf("%s/library/metadata/%s/children", c.ServerURL, ratingKey)
@@ -27,7 +26,6 @@ func (c *Client) Children(ctx context.Context, ratingKey string) ([]MediaItem, e
 	return out.MediaContainer.Metadata, nil
 }
 
-// Item returns a single metadata item by rating key (with its summary/title/thumb).
 func (c *Client) Item(ctx context.Context, ratingKey string) (*MediaItem, error) {
 	var out itemsResponse
 	u := fmt.Sprintf("%s/library/metadata/%s", c.ServerURL, ratingKey)
@@ -40,10 +38,9 @@ func (c *Client) Item(ctx context.Context, ratingKey string) (*MediaItem, error)
 	return &out.MediaContainer.Metadata[0], nil
 }
 
-// EditFields sets and/or locks metadata fields on an item. fields maps Plex
-// field parameters to values, e.g. {"summary.value": "", "summary.locked": "1"}.
-// typ is one of the Type* constants; sectionID is the library section the item
-// belongs to. Locking a field keeps a later metadata refresh from reverting it.
+// EditFields sets and/or locks metadata fields, e.g.
+// {"summary.value": "", "summary.locked": "1"}. Locking a field is what keeps a
+// later Plex metadata refresh from reverting spoilarr's changes.
 func (c *Client) EditFields(ctx context.Context, sectionID, ratingKey string, typ int, fields map[string]string) error {
 	q := url.Values{}
 	q.Set("type", fmt.Sprintf("%d", typ))
@@ -56,8 +53,8 @@ func (c *Client) EditFields(ctx context.Context, sectionID, ratingKey string, ty
 	return c.do(ctx, "PUT", u, nil, nil)
 }
 
-// UploadPoster uploads JPEG bytes as a new poster/thumb for the item and selects
-// it. Works for show, season, and episode rating keys.
+// UploadPoster uploads JPEG bytes and selects them as the poster/thumb. Works
+// for show, season, and episode rating keys.
 func (c *Client) UploadPoster(ctx context.Context, ratingKey string, jpeg []byte) error {
 	u := fmt.Sprintf("%s/library/metadata/%s/posters", c.ServerURL, ratingKey)
 	req, err := http.NewRequestWithContext(ctx, "POST", u, bytes.NewReader(jpeg))

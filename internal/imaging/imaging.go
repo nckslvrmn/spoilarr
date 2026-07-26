@@ -1,8 +1,7 @@
 // Package imaging transforms artwork for spoiler protection: blurring a poster,
-// filling it with a solid color, and (later) generating replacement cards.
-//
-// Everything is encoded back to JPEG since that is what Plex serves for
-// posters/thumbs and what its upload endpoint expects.
+// filling it with a solid color, or generating a replacement card. Everything is
+// encoded back to JPEG, which is what Plex serves for posters/thumbs and what its
+// upload endpoint expects.
 package imaging
 
 import (
@@ -16,26 +15,24 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-// JPEGQuality used when encoding transformed artwork.
 const JPEGQuality = 90
 
-// Blur returns a Gaussian-blurred JPEG of src. sigma controls blur strength
-// (larger = blurrier); values around 15–30 obscure detail while keeping the
-// overall shape/color so the tile still looks intentional.
+// Blur returns a Gaussian-blurred JPEG. sigma is blur strength; around 15-30
+// obscures detail while keeping the overall shape so the tile still looks
+// intentional.
 func Blur(src []byte, sigma float64) ([]byte, error) {
 	img, err := imaging.Decode(bytes.NewReader(src))
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}
-	// Downscale-then-blur is cheaper and produces a smoother frosted look than
+	// Downscaling first is cheaper and gives a smoother frosted look than
 	// blurring at full poster resolution.
 	small := imaging.Resize(img, 300, 0, imaging.Linear)
 	blurred := imaging.Blur(small, sigma)
 	return encode(blurred)
 }
 
-// SolidColor returns a JPEG of the given size filled with a single color,
-// preserving src's dimensions so Plex keeps the right aspect ratio.
+// SolidColor keeps src's dimensions so Plex keeps the right aspect ratio.
 func SolidColor(src []byte, c color.Color) ([]byte, error) {
 	img, err := imaging.Decode(bytes.NewReader(src))
 	if err != nil {
@@ -46,8 +43,8 @@ func SolidColor(src []byte, c color.Color) ([]byte, error) {
 	return encode(filled)
 }
 
-// DimensionsOf returns the pixel width/height of an encoded image without fully
-// decoding it. Falls back to a 2:3 poster size on error.
+// DimensionsOf reads the size without a full decode, falling back to a 2:3
+// poster shape on error.
 func DimensionsOf(src []byte) (int, int) {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(src))
 	if err != nil || cfg.Width == 0 {

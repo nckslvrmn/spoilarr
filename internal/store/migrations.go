@@ -2,26 +2,24 @@ package store
 
 import "fmt"
 
-// migrations are applied in order. Each entry runs exactly once; the index+1 is
-// recorded in schema_version. Never edit or reorder an existing migration once
-// it has shipped — append a new one instead.
+// migrations run in order, each exactly once. Never edit or reorder one that has
+// shipped, only append.
 var migrations = []string{
-	// 0001 — config key/value store.
+	// 0001
 	`CREATE TABLE config (
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
 	);`,
 
-	// 0002 — shows/movies the user opted into protecting, with their spoiler
-	// profile and reveal policy. profile is a JSON blob (see internal/protect).
+	// 0002
 	`CREATE TABLE protected_items (
 		id            INTEGER PRIMARY KEY,
 		rating_key    TEXT NOT NULL UNIQUE,
 		section_id    TEXT NOT NULL,
 		media_type    TEXT NOT NULL,             -- 'show' | 'movie'
 		title         TEXT NOT NULL,
-		profile       TEXT NOT NULL DEFAULT '{}',-- JSON spoiler profile
-		reveal_policy TEXT NOT NULL DEFAULT 'never', -- never|on_watched|after_days|manual
+		profile       TEXT NOT NULL DEFAULT '{}',-- JSON spoiler profile (see internal/protect)
+		reveal_policy TEXT NOT NULL DEFAULT 'never', -- never|on_watched|after_days|manual|inherit
 		reveal_days   INTEGER NOT NULL DEFAULT 0,
 		season_scope  TEXT NOT NULL DEFAULT 'all',-- 'all' or JSON array of season numbers
 		enabled       INTEGER NOT NULL DEFAULT 1,
@@ -29,8 +27,7 @@ var migrations = []string{
 		updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 	);`,
 
-	// 0003 — per-item state for everything we actually acted on (episodes,
-	// seasons, movies). Holds the original metadata so reveal restores exactly.
+	// 0003: holds the original metadata so reveal can restore it exactly.
 	`CREATE TABLE item_state (
 		id                  INTEGER PRIMARY KEY,
 		rating_key          TEXT NOT NULL UNIQUE,
@@ -49,8 +46,8 @@ var migrations = []string{
 	`CREATE INDEX idx_item_state_parent ON item_state(parent_show_key);`,
 	`CREATE INDEX idx_item_state_state  ON item_state(state);`,
 
-	// 0004 — per-season overrides. A NULL profile/reveal_policy means "inherit
-	// from the show" (which may itself inherit the global defaults).
+	// 0004: a NULL profile/reveal_policy means inherit from the show, which may
+	// itself inherit the global defaults.
 	`CREATE TABLE season_overrides (
 		id                INTEGER PRIMARY KEY,
 		protected_item_id INTEGER NOT NULL REFERENCES protected_items(id) ON DELETE CASCADE,
@@ -62,7 +59,6 @@ var migrations = []string{
 	);`,
 }
 
-// migrate applies any migrations not yet recorded in schema_version.
 func (s *Store) migrate() error {
 	if _, err := s.db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
 		return err

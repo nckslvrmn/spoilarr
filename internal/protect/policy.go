@@ -8,7 +8,6 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// Reveal policies.
 const (
 	RevealNever     = "never"
 	RevealOnWatched = "on_watched"
@@ -16,10 +15,9 @@ const (
 	RevealManual    = "manual"
 )
 
-// Reconcile brings one protected show/movie in line with its policy: it protects
-// items not yet handled and auto-reveals items whose reveal condition is now met
-// (watched, or N days past air date). Items already revealed are left alone so
-// they are not re-hidden. This is what the poller and webhooks drive.
+// Reconcile protects items not yet handled and auto-reveals ones whose condition
+// is now met (watched, or N days past air date). Already-revealed items are left
+// alone so they aren't re-hidden. Driven by the poller and webhooks.
 func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Result, error) {
 	r, err := p.buildResolver(pi)
 	if err != nil {
@@ -29,48 +27,50 @@ func (p *Processor) Reconcile(ctx context.Context, pi store.ProtectedItem) (Resu
 		return p.reconcileMovie(ctx, pi, r)
 	}
 
-	var res Result
 	scope := parseScope(pi.SeasonScope)
 	seasons, err := p.plex.Children(ctx, pi.RatingKey)
 	if err != nil {
-		return res, err
+		return Result{}, err
 	}
+	var tasks []func() Result
 	for _, season := range seasons {
 		if season.Type != "season" || (scope != nil && !scope[season.Index]) {
 			continue
 		}
+		season := season
 		prof := r.ProfileFor(season.Index)
 		policy, days := r.PolicyFor(season.Index)
 		if prof.SeasonPoster {
-			if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
-				p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
-			}
+			tasks = append(tasks, func() Result {
+				if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
+					p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
+				}
+				return Result{}
+			})
 		}
 		episodes, err := p.plex.Children(ctx, season.RatingKey)
 		if err != nil {
 			p.log.Warn("list episodes failed", "season", season.RatingKey, "err", err)
-			res.Errors++
 			continue
 		}
 		for _, ep := range episodes {
 			if ep.Type != "episode" {
 				continue
 			}
-			n, err := p.reconcileEpisode(ctx, pi, prof, policy, days, ep)
-			if err != nil {
-				p.store.SetItemError(ep.RatingKey, err.Error())
-				res.Errors++
-				continue
-			}
-			res.Protected += n.Protected
-			res.Revealed += n.Revealed
+			ep := ep
+			tasks = append(tasks, func() Result {
+				n, err := p.reconcileEpisode(ctx, pi, prof, policy, days, ep)
+				if err != nil {
+					p.store.SetItemError(ep.RatingKey, err.Error())
+					return Result{Errors: 1}
+				}
+				return n
+			})
 		}
 	}
-	return res, nil
+	return p.runTasks(tasks), nil
 }
 
-// reconcileEpisode protects a new episode or reveals a protected one per the
-// effective (possibly season-overridden) reveal policy.
 func (p *Processor) reconcileEpisode(ctx context.Context, pi store.ProtectedItem, prof Profile, policy string, days int, ep plex.MediaItem) (Result, error) {
 	var res Result
 	st, ok, err := p.store.GetItemState(ep.RatingKey)
@@ -82,7 +82,7 @@ func (p *Processor) reconcileEpisode(ctx context.Context, pi store.ProtectedItem
 	switch {
 	case !ok:
 		if reveal {
-			return res, nil // already meets the reveal condition — don't hide it
+			return res, nil // already meets the reveal condition, so don't hide it
 		}
 		if err := p.protectEpisode(ctx, pi, prof, ep); err != nil {
 			return res, err
@@ -121,7 +121,6 @@ func (p *Processor) reconcileMovie(ctx context.Context, pi store.ProtectedItem, 
 	return res, nil
 }
 
-// shouldReveal evaluates a reveal policy against an episode/movie.
 func shouldReveal(policy string, days int, m plex.MediaItem) bool {
 	switch policy {
 	case RevealOnWatched:
@@ -132,7 +131,7 @@ func shouldReveal(policy string, days int, m plex.MediaItem) bool {
 			return false
 		}
 		return time.Since(ad) >= time.Duration(days)*24*time.Hour
-	default: // never, manual, inherit-resolved-to-those
+	default: // never, manual, or inherit that resolved to those
 		return false
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/nckslvrmn/spoilarr/internal/config"
 	"github.com/nckslvrmn/spoilarr/internal/imaging"
@@ -16,9 +17,52 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// parseScope interprets a protected item's season_scope. "all" (or empty) means
-// every season and returns nil. Otherwise it decodes a JSON array of season
-// numbers into a set for membership checks.
+// workers bounds parallelism. The Plex client's rate limiter still caps total
+// throughput, so concurrency just overlaps per-request latency instead of
+// running a whole-show protect/reveal strictly serially.
+const workers = 8
+
+// runTasks runs per-item tasks with bounded concurrency and sums their Results.
+// Safe with the store's single writer connection: DB writes serialize while the
+// slow Plex calls run in parallel.
+func (p *Processor) runTasks(tasks []func() Result) Result {
+	if len(tasks) == 0 {
+		return Result{}
+	}
+	var (
+		wg  sync.WaitGroup
+		mu  sync.Mutex
+		agg Result
+	)
+	ch := make(chan func() Result)
+	n := workers
+	if n > len(tasks) {
+		n = len(tasks)
+	}
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for t := range ch {
+				res := t()
+				mu.Lock()
+				agg.Protected += res.Protected
+				agg.Revealed += res.Revealed
+				agg.Errors += res.Errors
+				mu.Unlock()
+			}
+		}()
+	}
+	for _, t := range tasks {
+		ch <- t
+	}
+	close(ch)
+	wg.Wait()
+	return agg
+}
+
+// parseScope returns nil for "all"/empty (every season), otherwise the set of
+// season numbers from the stored JSON array.
 func parseScope(scope string) map[int]bool {
 	scope = strings.TrimSpace(scope)
 	if scope == "" || scope == "all" {
@@ -35,7 +79,6 @@ func parseScope(scope string) map[int]bool {
 	return set
 }
 
-// Processor applies and reverts spoiler protection against a Plex server.
 type Processor struct {
 	store *store.Store
 	plex  *plex.Client
@@ -43,12 +86,10 @@ type Processor struct {
 	log   *slog.Logger
 }
 
-// NewProcessor builds a processor bound to a Plex client.
 func NewProcessor(st *store.Store, pc *plex.Client, cfg config.Config, log *slog.Logger) *Processor {
 	return &Processor{store: st, plex: pc, cfg: cfg, log: log}
 }
 
-// Result summarizes a protect/reveal run.
 type Result struct {
 	Protected int
 	Revealed  int
@@ -69,8 +110,6 @@ func (p *Processor) buildResolver(pi store.ProtectedItem) (Resolver, error) {
 	return NewResolver(defs, pi, overrides), nil
 }
 
-// ProtectOne protects a single opted-in show or movie, resolving each season's
-// effective profile through the defaults → show → season inheritance chain.
 func (p *Processor) ProtectOne(ctx context.Context, pi store.ProtectedItem) (Result, error) {
 	r, err := p.buildResolver(pi)
 	if err != nil {
@@ -83,55 +122,55 @@ func (p *Processor) ProtectOne(ctx context.Context, pi store.ProtectedItem) (Res
 }
 
 func (p *Processor) protectShow(ctx context.Context, pi store.ProtectedItem, r Resolver) (Result, error) {
-	var res Result
 	scope := parseScope(pi.SeasonScope)
 	seasons, err := p.plex.Children(ctx, pi.RatingKey)
 	if err != nil {
-		return res, err
+		return Result{}, err
 	}
+	var tasks []func() Result
 	for _, season := range seasons {
-		if season.Type != "season" {
+		if season.Type != "season" || (scope != nil && !scope[season.Index]) {
 			continue
 		}
-		if scope != nil && !scope[season.Index] {
-			continue // season not in the configured scope
-		}
+		season := season
 		prof := r.ProfileFor(season.Index)
 		if prof.SeasonPoster {
-			if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
-				p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
-				res.Errors++
-			}
+			tasks = append(tasks, func() Result {
+				if err := p.protectArtOnly(ctx, pi, prof, season, "season"); err != nil {
+					p.log.Warn("season poster protect failed", "season", season.RatingKey, "err", err)
+					return Result{Errors: 1}
+				}
+				return Result{}
+			})
 		}
 		episodes, err := p.plex.Children(ctx, season.RatingKey)
 		if err != nil {
 			p.log.Warn("list episodes failed", "season", season.RatingKey, "err", err)
-			res.Errors++
 			continue
 		}
 		for _, ep := range episodes {
 			if ep.Type != "episode" {
 				continue
 			}
-			if err := p.protectEpisode(ctx, pi, prof, ep); err != nil {
-				p.log.Warn("episode protect failed", "episode", ep.RatingKey, "err", err)
-				p.store.SetItemError(ep.RatingKey, err.Error())
-				res.Errors++
-				continue
-			}
-			res.Protected++
+			ep := ep
+			tasks = append(tasks, func() Result {
+				if err := p.protectEpisode(ctx, pi, prof, ep); err != nil {
+					p.log.Warn("episode protect failed", "episode", ep.RatingKey, "err", err)
+					p.store.SetItemError(ep.RatingKey, err.Error())
+					return Result{Errors: 1}
+				}
+				return Result{Protected: 1}
+			})
 		}
 	}
-	return res, nil
+	return p.runTasks(tasks), nil
 }
 
-// protectEpisode backs up an episode's original art/summary/title, then blurs
-// the art, rewrites the summary/title, and locks those fields.
 func (p *Processor) protectEpisode(ctx context.Context, pi store.ProtectedItem, prof Profile, ep plex.MediaItem) error {
 	if st, ok, err := p.store.GetItemState(ep.RatingKey); err != nil {
 		return err
 	} else if ok && st.State == store.StateProtected {
-		return nil // already protected — idempotent
+		return nil
 	}
 
 	tag := fmt.Sprintf("S%02dE%02d", ep.ParentIndex, ep.Index)
@@ -167,7 +206,7 @@ func (p *Processor) protectEpisode(ctx context.Context, pi store.ProtectedItem, 
 	})
 }
 
-// protectArtOnly protects just the artwork of an item (used for season posters).
+// protectArtOnly protects only the artwork, used for season posters.
 func (p *Processor) protectArtOnly(ctx context.Context, pi store.ProtectedItem, prof Profile, item plex.MediaItem, mediaType string) error {
 	if st, ok, err := p.store.GetItemState(item.RatingKey); err != nil {
 		return err
@@ -227,17 +266,15 @@ func (p *Processor) protectMovie(ctx context.Context, pi store.ProtectedItem, pr
 	return res, err
 }
 
-// backupAndTransformArt saves the current artwork to disk (for later restore),
-// then uploads a blurred/solid replacement. Returns the relative backup path, or
-// "" if the item had no artwork. A failure to transform is fatal to the caller,
-// but a missing backup means we won't have touched the art at all.
+// backupAndTransformArt returns "" when there's no art or thumbnails are left
+// alone.
 func (p *Processor) backupAndTransformArt(ctx context.Context, ratingKey, thumb string, prof Profile, cardTitle, cardTag string) (string, error) {
 	if thumb == "" || prof.Thumbnail == ThumbLeave {
 		return "", nil
 	}
-	// The on-disk backup is the source of truth for the ORIGINAL art. Reuse it
-	// if present (e.g. re-protecting after a reveal) so we never back up — or
-	// blur — an already-spoilered image.
+	// The on-disk backup is the source of truth for the ORIGINAL art. Reuse it if
+	// present (e.g. re-protecting after a reveal) so we never back up or blur an
+	// already-spoilered image.
 	rel := filepath.Join("originals", ratingKey+".jpg")
 	abs := filepath.Join(p.cfg.ImagesDir(), rel)
 	orig, err := os.ReadFile(abs)
@@ -272,11 +309,9 @@ func (p *Processor) backupAndTransformArt(ctx context.Context, ratingKey, thumb 
 	return rel, nil
 }
 
-// RevealOne restores every item protected under a show/movie to its originals
-// and unlocks the fields.
 func (p *Processor) RevealOne(ctx context.Context, pi store.ProtectedItem) (Result, error) {
 	var res Result
-	// For a movie the protected key is the movie itself; for a show it's the
+	// For a movie the protected key is the movie itself. For a show it's the
 	// children keyed by the show rating key.
 	keys := []string{}
 	if pi.MediaType == "movie" {
@@ -291,26 +326,29 @@ func (p *Processor) RevealOne(ctx context.Context, pi store.ProtectedItem) (Resu
 		}
 	}
 
+	var tasks []func() Result
 	for _, key := range keys {
-		st, ok, err := p.store.GetItemState(key)
-		if err != nil || !ok {
-			continue
-		}
-		if err := p.revealItem(ctx, pi, st); err != nil {
-			p.log.Warn("reveal failed", "item", key, "err", err)
-			p.store.SetItemError(key, err.Error())
-			res.Errors++
-			continue
-		}
-		res.Revealed++
+		key := key
+		tasks = append(tasks, func() Result {
+			st, ok, err := p.store.GetItemState(key)
+			if err != nil || !ok {
+				return Result{}
+			}
+			if err := p.revealItem(ctx, pi, st); err != nil {
+				p.log.Warn("reveal failed", "item", key, "err", err)
+				p.store.SetItemError(key, err.Error())
+				return Result{Errors: 1}
+			}
+			return Result{Revealed: 1}
+		})
 	}
-	return res, nil
+	return p.runTasks(tasks), nil
 }
 
 func (p *Processor) revealItem(ctx context.Context, pi store.ProtectedItem, st store.ItemState) error {
-	// Restore the original artwork first (this re-locks thumb), then the edit
-	// below unlocks every field we touched so the item is left exactly as Plex
-	// would manage it on its own.
+	// Restore the original art first (uploading re-locks thumb), then the edit
+	// below unlocks every field we touched, leaving the item exactly as Plex would
+	// manage it on its own.
 	if st.OriginalThumbPath != "" {
 		orig, err := os.ReadFile(filepath.Join(p.cfg.ImagesDir(), st.OriginalThumbPath))
 		if err == nil {

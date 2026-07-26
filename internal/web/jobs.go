@@ -2,9 +2,8 @@ package web
 
 import "sync"
 
-// jobRunner tracks background protect/reveal operations keyed by rating key, so
-// the UI can poll status without blocking the request while a whole show is
-// processed. One job per key at a time.
+// jobRunner runs background protect/reveal work keyed by rating key so the UI can
+// poll status instead of blocking on a whole-show operation. One job per key.
 type jobRunner struct {
 	mu sync.Mutex
 	m  map[string]*jobState
@@ -15,8 +14,7 @@ type jobState struct {
 	message string
 }
 
-// start launches fn in the background unless a job for key is already running.
-// Returns false if one was already in flight.
+// start returns false if a job for key is already in flight.
 func (j *jobRunner) start(key string, fn func() string) bool {
 	j.mu.Lock()
 	if j.m == nil {
@@ -38,7 +36,6 @@ func (j *jobRunner) start(key string, fn func() string) bool {
 	return true
 }
 
-// status reports whether a job for key is running and its last message.
 func (j *jobRunner) status(key string) (running bool, message string) {
 	j.mu.Lock()
 	defer j.mu.Unlock()

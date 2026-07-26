@@ -6,7 +6,6 @@ import (
 	"os"
 )
 
-// handleManage renders the connection management + danger-zone page.
 func (s *Server) handleManage(w http.ResponseWriter, r *http.Request) {
 	token, _ := s.store.GetConfig(cfgToken)
 	serverURL, _ := s.store.GetConfig(cfgServerURL)
@@ -28,7 +27,6 @@ func (s *Server) handleManage(w http.ResponseWriter, r *http.Request) {
 // allJobKey is the job key for library-wide operations (reveal all).
 const allJobKey = "__all__"
 
-// handleRevealAll reveals every protected item in the background (non-destructive).
 func (s *Server) handleRevealAll(w http.ResponseWriter, r *http.Request) {
 	s.jobs.start(allJobKey, func() string {
 		revealed, errs := s.revealAllBlocking()
@@ -37,7 +35,6 @@ func (s *Server) handleRevealAll(w http.ResponseWriter, r *http.Request) {
 	s.renderManageStatus(w)
 }
 
-// handleManageStatus polls the reveal-all job status.
 func (s *Server) handleManageStatus(w http.ResponseWriter, r *http.Request) {
 	s.renderManageStatus(w)
 }
@@ -47,10 +44,8 @@ func (s *Server) renderManageStatus(w http.ResponseWriter) {
 	s.render(w, "manage_status", map[string]any{"Running": running, "Message": msg})
 }
 
-// handleDisconnect clears the Plex connection (and optionally all data), after
-// optionally revealing everything first. This is a plain form POST that runs
-// synchronously and redirects to setup, so the destructive work is finished
-// before the user lands anywhere.
+// handleDisconnect runs synchronously (a plain form POST, not htmx) so the
+// destructive work finishes before the redirect lands on setup.
 func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		s.render(w, "error.html", map[string]any{"Error": err.Error()})
@@ -64,12 +59,10 @@ func (s *Server) handleDisconnect(w http.ResponseWriter, r *http.Request) {
 		s.revealAllBlocking()
 	}
 
-	// Always clear the Plex connection so setup can run again.
 	s.store.DeleteConfig(cfgToken, cfgServerURL, cfgServerName, cfgMachineID)
 
 	if reset {
 		s.store.ResetData()
-		// Wipe image backups/generated cards.
 		for _, dir := range []string{s.cfg.OriginalsDir(), s.cfg.GeneratedDir()} {
 			os.RemoveAll(dir)
 			os.MkdirAll(dir, 0o755)

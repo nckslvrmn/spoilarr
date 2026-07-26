@@ -19,7 +19,6 @@ var templatesFS embed.FS
 //go:embed static/*
 var staticFS embed.FS
 
-// Server holds dependencies shared by all handlers.
 type Server struct {
 	cfg   config.Config
 	store *store.Store
@@ -29,7 +28,6 @@ type Server struct {
 	jobs  jobRunner
 }
 
-// New constructs the HTTP server and parses templates.
 func New(cfg config.Config, st *store.Store, log *slog.Logger) (*Server, error) {
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"jobData":    jobData,
@@ -41,21 +39,18 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) (*Server, error) 
 	return &Server{cfg: cfg, store: st, log: log, tmpl: tmpl}, nil
 }
 
-// fieldsData packages a profile + reveal policy for the shared profile_fields
-// template fragment (used by the show form and each season override form).
+// fieldsData feeds the shared profile_fields fragment, used by the show form and
+// each season override form.
 func fieldsData(profile any, policy string, days int) map[string]any {
 	return map[string]any{"Profile": profile, "Policy": policy, "Days": days}
 }
 
-// jobData builds the data map the job_status fragment expects, for use from
-// within other templates.
 func jobData(key string, running bool, protected, revealed int, message string) map[string]any {
 	return map[string]any{
 		"Key": key, "Running": running, "Protected": protected, "Revealed": revealed, "Message": message,
 	}
 }
 
-// Handler builds the HTTP route table.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -117,7 +112,6 @@ func (s *Server) handleHome(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// render executes a template within the shared layout and handles errors.
 func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
@@ -126,7 +120,6 @@ func (s *Server) render(w http.ResponseWriter, name string, data any) {
 	}
 }
 
-// withLogging wraps a handler with structured request logging.
 func (s *Server) withLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next.ServeHTTP(w, r)

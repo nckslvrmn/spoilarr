@@ -5,7 +5,6 @@ import (
 	"strconv"
 )
 
-// Config keys for the global default spoiler settings that shows inherit.
 const (
 	keyDefaultProfile = "default_profile"
 	keyDefaultPolicy  = "default_reveal_policy"
@@ -13,14 +12,13 @@ const (
 )
 
 // Defaults are the global spoiler settings a show/season inherits when it has no
-// override. Profile is a JSON blob ("" means fall back to the built-in profile).
+// override. An empty Profile falls back to the built-in profile.
 type Defaults struct {
 	Profile      string
 	RevealPolicy string
 	RevealDays   int
 }
 
-// GetDefaults returns the global defaults, seeding sensible values when unset.
 func (s *Store) GetDefaults() (Defaults, error) {
 	profile, err := s.GetConfig(keyDefaultProfile)
 	if err != nil {
@@ -41,7 +39,6 @@ func (s *Store) GetDefaults() (Defaults, error) {
 	return Defaults{Profile: profile, RevealPolicy: policy, RevealDays: days}, nil
 }
 
-// SetDefaults persists the global defaults.
 func (s *Store) SetDefaults(d Defaults) error {
 	if err := s.SetConfig(keyDefaultProfile, d.Profile); err != nil {
 		return err
@@ -52,8 +49,8 @@ func (s *Store) SetDefaults(d Defaults) error {
 	return s.SetConfig(keyDefaultDays, strconv.Itoa(d.RevealDays))
 }
 
-// SeasonOverride is a per-season override of a show's spoiler settings. A nil
-// Profile or RevealPolicy pointer means "inherit from the show".
+// SeasonOverride overrides a show's spoiler settings for one season. A nil
+// Profile or RevealPolicy means inherit that dimension from the show.
 type SeasonOverride struct {
 	SeasonIndex  int
 	Profile      *string
@@ -61,8 +58,6 @@ type SeasonOverride struct {
 	RevealDays   int
 }
 
-// GetSeasonOverrides returns all season overrides for a protected item, keyed by
-// season index.
 func (s *Store) GetSeasonOverrides(protectedItemID int64) (map[int]SeasonOverride, error) {
 	rows, err := s.db.Query(
 		`SELECT season_index, profile, reveal_policy, reveal_days
@@ -89,8 +84,6 @@ func (s *Store) GetSeasonOverrides(protectedItemID int64) (map[int]SeasonOverrid
 	return out, rows.Err()
 }
 
-// SetSeasonOverride upserts a season override. Pass nil Profile/RevealPolicy to
-// inherit that dimension from the show.
 func (s *Store) SetSeasonOverride(protectedItemID int64, o SeasonOverride) error {
 	_, err := s.db.Exec(
 		`INSERT INTO season_overrides (protected_item_id, season_index, profile, reveal_policy, reveal_days)
@@ -101,7 +94,6 @@ func (s *Store) SetSeasonOverride(protectedItemID int64, o SeasonOverride) error
 	return err
 }
 
-// DeleteSeasonOverride removes a season's override so it inherits the show again.
 func (s *Store) DeleteSeasonOverride(protectedItemID int64, seasonIndex int) error {
 	_, err := s.db.Exec(
 		`DELETE FROM season_overrides WHERE protected_item_id = ? AND season_index = ?`,

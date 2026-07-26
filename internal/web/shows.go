@@ -9,7 +9,6 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/plex"
 )
 
-// handleShow renders a show detail page with per-season protection controls.
 func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
 	client, err := s.plexClient()
 	if err != nil || client.Token == "" || client.ServerURL == "" {
@@ -30,7 +29,6 @@ func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Current protection state → which seasons show as selected.
 	pi, isProtected, _ := s.store.GetProtectedItem(ratingKey)
 	wholeShow := isProtected && (pi.SeasonScope == "all" || pi.SeasonScope == "")
 	selected := map[int]bool{}
@@ -73,7 +71,6 @@ func (s *Server) handleShow(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleProtectSeasons saves the season-level protection choice for a show.
 func (s *Server) handleProtectSeasons(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		s.fragmentError(w, "", err)
@@ -83,7 +80,7 @@ func (s *Server) handleProtectSeasons(w http.ResponseWriter, r *http.Request) {
 	section := r.FormValue("section_id")
 	title := r.FormValue("title")
 
-	// "Entire show" wins and also covers future seasons.
+	// "Entire show" also covers future seasons, so it stores "all" rather than a list.
 	if r.FormValue("whole") == "1" {
 		if err := s.store.AddProtectedItem(showKey, section, "show", title); err != nil {
 			s.fragmentError(w, "", err)
@@ -96,14 +93,13 @@ func (s *Server) handleProtectSeasons(w http.ResponseWriter, r *http.Request) {
 
 	selected := r.Form["seasons"]
 	if len(selected) == 0 {
-		// Nothing selected — remove protection entirely.
 		s.store.RemoveProtectedItem(showKey)
 		s.render(w, "season_save_result", map[string]any{"Message": "Protection removed for this show."})
 		return
 	}
 
-	// How many seasons does the show have? If every one is selected, treat it as
-	// whole-show ("all"); otherwise store the explicit list.
+	// If every season is selected, store "all" (covers future seasons too),
+	// otherwise store the explicit list.
 	client, err := s.plexClient()
 	if err != nil {
 		s.fragmentError(w, "", err)
@@ -134,7 +130,6 @@ func (s *Server) handleProtectSeasons(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "season_save_result", map[string]any{"Message": msg})
 }
 
-// countSeasons returns how many season children a show has.
 func countSeasons(r *http.Request, client *plex.Client, showKey string) int {
 	seasons, err := client.Children(r.Context(), showKey)
 	if err != nil {

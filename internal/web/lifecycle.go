@@ -8,13 +8,11 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// jobCtx is the timeout for a background protect/reveal run. Whole-show
-// operations can touch hundreds of items, so give them room.
+// jobCtx gives a whole-show run room, since it can touch hundreds of items.
 func jobCtx() (context.Context, context.CancelFunc) {
 	return context.WithTimeout(context.Background(), 30*time.Minute)
 }
 
-// runProtect applies protection to a whole protected item and returns a summary.
 func (s *Server) runProtect(pi store.ProtectedItem) string {
 	proc, err := s.processor()
 	if err != nil {
@@ -29,7 +27,6 @@ func (s *Server) runProtect(pi store.ProtectedItem) string {
 	return fmt.Sprintf("Protected %d, %d errors", res.Protected, res.Errors)
 }
 
-// runReveal restores a whole protected item to its originals.
 func (s *Server) runReveal(pi store.ProtectedItem) string {
 	proc, err := s.processor()
 	if err != nil {
@@ -44,8 +41,8 @@ func (s *Server) runReveal(pi store.ProtectedItem) string {
 	return fmt.Sprintf("Revealed %d, %d errors", res.Revealed, res.Errors)
 }
 
-// revealAllBlocking reveals every protected item synchronously. Used before a
-// destructive reset so the library is restored while the backups still exist.
+// revealAllBlocking runs before a destructive reset, restoring the library while
+// the backups still exist.
 func (s *Server) revealAllBlocking() (revealed int, errs int) {
 	proc, err := s.processor()
 	if err != nil {

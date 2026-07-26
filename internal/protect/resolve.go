@@ -6,12 +6,12 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// PolicyInherit marks a show/season reveal policy as "inherit from the level
-// above" rather than an explicit choice.
+// PolicyInherit marks a reveal policy as inheriting from the level above rather
+// than an explicit choice.
 const PolicyInherit = "inherit"
 
-// Resolver computes the effective spoiler profile and reveal policy for a given
-// season, walking the inheritance chain: season override → show → global default.
+// Resolver computes the effective spoiler profile and reveal policy for a season,
+// walking the inheritance chain: season override, then show, then global default.
 type Resolver struct {
 	defProfile Profile
 	defPolicy  string
@@ -24,8 +24,6 @@ type Resolver struct {
 	overrides map[int]store.SeasonOverride
 }
 
-// NewResolver builds a Resolver from the global defaults, a protected item, and
-// its season overrides.
 func NewResolver(d store.Defaults, pi store.ProtectedItem, overrides map[int]store.SeasonOverride) Resolver {
 	pol := d.RevealPolicy
 	if pol == "" || pol == PolicyInherit {
@@ -42,7 +40,6 @@ func NewResolver(d store.Defaults, pi store.ProtectedItem, overrides map[int]sto
 	}
 }
 
-// ProfileFor returns the effective spoiler profile for a season number.
 func (r Resolver) ProfileFor(season int) Profile {
 	if o, ok := r.overrides[season]; ok && o.Profile != nil && strings.TrimSpace(*o.Profile) != "" {
 		return ParseProfile(*o.Profile)
@@ -50,7 +47,6 @@ func (r Resolver) ProfileFor(season int) Profile {
 	return r.showProfile()
 }
 
-// PolicyFor returns the effective reveal policy and day count for a season.
 func (r Resolver) PolicyFor(season int) (string, int) {
 	if o, ok := r.overrides[season]; ok && o.RevealPolicy != nil && *o.RevealPolicy != "" && *o.RevealPolicy != PolicyInherit {
 		return *o.RevealPolicy, o.RevealDays

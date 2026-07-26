@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// Identity is the minimal server identity used to validate a connection.
 type Identity struct {
 	MachineIdentifier string
 	Version           string
@@ -18,9 +17,8 @@ type identityResponse struct {
 	} `json:"MediaContainer"`
 }
 
-// Ping validates that ServerURL + Token reach a working Plex Media Server by
-// hitting its unauthenticated /identity endpoint (token still sent so a
-// misconfigured token is caught early via other calls).
+// Ping validates that ServerURL + Token reach a working server by hitting
+// /identity.
 func (c *Client) Ping(ctx context.Context) (*Identity, error) {
 	if c.ServerURL == "" {
 		return nil, fmt.Errorf("ping: no server URL configured")

@@ -1,7 +1,7 @@
 // Command spoilarr is a self-hosted service that hides Plex spoilers: it blurs
-// or replaces episode/season artwork, clears or rewrites descriptions, and
-// masks episode titles for shows you opt in — automatically as new items are
-// added, and reversibly per a configurable reveal policy.
+// or replaces episode/season artwork, clears or rewrites descriptions, and masks
+// episode titles for shows you opt in, automatically as new items are added and
+// reversibly per a configurable reveal policy.
 package main
 
 import (
@@ -54,12 +54,10 @@ func run(log *slog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	// Run the HTTP server until a shutdown signal arrives, then drain.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Background poller: the webhook backstop that protects new episodes and
-	// applies reveal policies.
+	// The poller is the webhook backstop for new episodes and reveal policies.
 	pol := poller.New(st, cfg, log, cfg.PollInterval)
 	go pol.Run(ctx)
 

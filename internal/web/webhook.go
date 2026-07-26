@@ -7,23 +7,20 @@ import (
 	"time"
 )
 
-// plexWebhook is the subset of the Plex webhook payload spoilarr acts on.
+// plexWebhook is the subset of the payload spoilarr acts on.
 type plexWebhook struct {
 	Event    string `json:"event"`
 	Metadata struct {
 		Type                 string `json:"type"`
 		RatingKey            string `json:"ratingKey"`
-		GrandparentRatingKey string `json:"grandparentRatingKey"` // show, for an episode
+		GrandparentRatingKey string `json:"grandparentRatingKey"` // the show, for an episode
 		GrandparentTitle     string `json:"grandparentTitle"`
 	} `json:"Metadata"`
 }
 
-// handlePlexWebhook receives Plex's multipart webhook. On library.new for an
-// episode of a protected show it protects immediately; on media.scrobble it
-// re-runs reconcile so an on_watched policy reveals the just-watched episode.
-// Work is done in the background so Plex gets a fast 200.
+// handlePlexWebhook reconciles the affected show in the background (so Plex gets
+// a fast 200) on library.new and media.scrobble.
 func (s *Server) handlePlexWebhook(w http.ResponseWriter, r *http.Request) {
-	// Optional shared secret guards the unauthenticated webhook endpoint.
 	if s.cfg.WebhookSecret != "" && r.URL.Query().Get("secret") != s.cfg.WebhookSecret {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -43,12 +40,11 @@ func (s *Server) handlePlexWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only these events are actionable.
 	if hook.Event != "library.new" && hook.Event != "media.scrobble" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	// The protected item is the show (grandparent) for an episode, else the item.
+	// The protected item is the show (grandparent) for an episode, else the item itself.
 	showKey := hook.Metadata.GrandparentRatingKey
 	if showKey == "" {
 		showKey = hook.Metadata.RatingKey
@@ -59,11 +55,10 @@ func (s *Server) handlePlexWebhook(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// reconcileFromWebhook reconciles a single protected show/movie in the background.
 func (s *Server) reconcileFromWebhook(showKey string) {
 	pi, ok, err := s.store.GetProtectedItem(showKey)
 	if err != nil || !ok {
-		return // not a protected show — ignore
+		return // not a protected show, so ignore
 	}
 	proc, err := s.processor()
 	if err != nil {

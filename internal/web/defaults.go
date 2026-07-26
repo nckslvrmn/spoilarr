@@ -8,8 +8,6 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// handleDefaults renders the global default spoiler profile + reveal policy that
-// shows and seasons inherit when they have no override of their own.
 func (s *Server) handleDefaults(w http.ResponseWriter, r *http.Request) {
 	defs, err := s.store.GetDefaults()
 	if err != nil {
@@ -23,7 +21,6 @@ func (s *Server) handleDefaults(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleSaveDefaults persists the global defaults.
 func (s *Server) handleSaveDefaults(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		s.fragmentError(w, "", err)

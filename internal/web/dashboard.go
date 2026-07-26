@@ -10,7 +10,6 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/protect"
 )
 
-// processor builds a protect.Processor from the stored Plex connection.
 func (s *Server) processor() (*protect.Processor, error) {
 	client, err := s.plexClient()
 	if err != nil {
@@ -19,7 +18,6 @@ func (s *Server) processor() (*protect.Processor, error) {
 	return protect.NewProcessor(s.store, client, s.cfg, s.log), nil
 }
 
-// protectedRow is a dashboard row: the item plus its live state counts.
 type protectedRow struct {
 	Item      any
 	Protected int
@@ -27,8 +25,6 @@ type protectedRow struct {
 	Running   bool
 }
 
-// handleProtected lists opted-in shows/movies with protect/reveal controls and
-// a status panel (last poll, interval, webhook).
 func (s *Server) handleProtected(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.ListProtectedItems()
 	if err != nil {
@@ -53,8 +49,6 @@ func (s *Server) handleProtected(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleProtectNow / handleReveal launch background work and return a status
-// fragment that polls for completion.
 func (s *Server) handleProtectNow(w http.ResponseWriter, r *http.Request) {
 	s.startItemJob(w, r, "protect")
 }
@@ -94,7 +88,6 @@ func (s *Server) startItemJob(w http.ResponseWriter, r *http.Request, action str
 	s.renderItemStatus(w, key)
 }
 
-// handleItemStatus returns the live status fragment for one protected item.
 func (s *Server) handleItemStatus(w http.ResponseWriter, r *http.Request) {
 	s.renderItemStatus(w, r.PathValue("ratingKey"))
 }
@@ -111,7 +104,6 @@ func (s *Server) renderItemStatus(w http.ResponseWriter, key string) {
 	})
 }
 
-// humanTime renders an RFC3339 timestamp as a relative "N minutes ago".
 func humanTime(rfc string) string {
 	if rfc == "" {
 		return "never"

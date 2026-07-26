@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// handleLibraries lists the show/movie library sections.
 func (s *Server) handleLibraries(w http.ResponseWriter, r *http.Request) {
 	client, err := s.plexClient()
 	if err != nil || client.Token == "" || client.ServerURL == "" {
@@ -20,7 +19,6 @@ func (s *Server) handleLibraries(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "libraries.html", map[string]any{"Sections": sections})
 }
 
-// handleSection lists the shows/movies in a section with protect toggles.
 func (s *Server) handleSection(w http.ResponseWriter, r *http.Request) {
 	client, err := s.plexClient()
 	if err != nil || client.Token == "" || client.ServerURL == "" {
@@ -39,8 +37,7 @@ func (s *Server) handleSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Flatten each item into the fields the tile + protect button need, so the
-	// template needs no dict helper.
+	// Flatten each item so the template needs no dict helper.
 	type row struct {
 		RatingKey string
 		SectionID string
@@ -69,8 +66,8 @@ func (s *Server) handleSection(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleProtect enrolls an item and immediately applies protection in the
-// background, so checking the box actually does something visible rather than
-// just waiting for the next poll.
+// background, so ticking the box does something visible instead of waiting for
+// the next poll.
 func (s *Server) handleProtect(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	ratingKey := r.FormValue("rating_key")
@@ -84,8 +81,8 @@ func (s *Server) handleProtect(w http.ResponseWriter, r *http.Request) {
 	s.renderToggle(w, r, true)
 }
 
-// handleUnprotect reveals everything first (restoring originals while the
-// backups still exist), then removes the item, all in the background.
+// handleUnprotect reveals originals first, while the backups still exist, then
+// removes the item.
 func (s *Server) handleUnprotect(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	ratingKey := r.FormValue("rating_key")
@@ -111,8 +108,8 @@ func (s *Server) renderToggle(w http.ResponseWriter, r *http.Request, protected 
 	})
 }
 
-// handlePlexImage proxies artwork from Plex so the browser never sees the token
-// and cross-origin issues are avoided. Only /library/ paths are allowed.
+// handlePlexImage proxies artwork so the token never reaches the browser. Only
+// /library/ paths are allowed, to keep it from being an open proxy.
 func (s *Server) handlePlexImage(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if !strings.HasPrefix(path, "/library/") {

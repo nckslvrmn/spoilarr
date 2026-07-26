@@ -1,5 +1,5 @@
 // Package poller runs spoilarr's periodic reconcile: the backstop that protects
-// newly-added episodes and applies reveal policies even when webhooks are missed
+// newly-added episodes and applies reveal policies even when a webhook is missed
 // (or the app was down when an item was added).
 package poller
 
@@ -10,19 +10,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nckslvrmn/spoilarr/internal/conn"
 	"github.com/nckslvrmn/spoilarr/internal/config"
+	"github.com/nckslvrmn/spoilarr/internal/conn"
 	"github.com/nckslvrmn/spoilarr/internal/protect"
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// Status config keys, surfaced on the dashboard.
 const (
 	KeyLastPollAt      = "last_poll_at"
 	KeyLastPollSummary = "last_poll_summary"
 )
 
-// Poller reconciles all protected items on an interval.
 type Poller struct {
 	store    *store.Store
 	cfg      config.Config
@@ -31,15 +29,14 @@ type Poller struct {
 	mu       sync.Mutex // prevents overlapping cycles
 }
 
-// New builds a Poller.
 func New(st *store.Store, cfg config.Config, log *slog.Logger, interval time.Duration) *Poller {
 	return &Poller{store: st, cfg: cfg, log: log, interval: interval}
 }
 
-// Run blocks, reconciling immediately and then every interval until ctx is done.
+// Run reconciles immediately, then every interval until ctx is done.
 func (p *Poller) Run(ctx context.Context) {
 	p.log.Info("poller started", "interval", p.interval)
-	// A short delay lets the server settle before the first cycle.
+	// Let the server settle before the first cycle.
 	timer := time.NewTimer(5 * time.Second)
 	defer timer.Stop()
 	for {
@@ -54,8 +51,7 @@ func (p *Poller) Run(ctx context.Context) {
 	}
 }
 
-// RunOnce reconciles every enabled protected item a single time. Safe to call
-// concurrently; overlapping calls are serialized.
+// RunOnce is safe to call concurrently; overlapping calls are serialized.
 func (p *Poller) RunOnce(ctx context.Context) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -9,7 +9,6 @@ import (
 	"strings"
 )
 
-// Thumbnail / description / title modes.
 const (
 	ThumbBlur      = "blur"
 	ThumbSolid     = "solid"
@@ -26,8 +25,8 @@ const (
 	TitleGeneric = "generic"
 )
 
-// Profile is the per-show configuration for how spoilers are hidden. The zero
-// value is not meaningful; use DefaultProfile then override.
+// Profile is how spoilers are hidden. The zero value isn't meaningful; start
+// from DefaultProfile.
 type Profile struct {
 	Thumbnail    string  `json:"thumbnail"`
 	BlurSigma    float64 `json:"blur_sigma"`
@@ -37,8 +36,6 @@ type Profile struct {
 	SeasonPoster bool    `json:"season_poster"`
 }
 
-// DefaultProfile is what a freshly-protected show gets: blurred art, cleared
-// descriptions, episode titles reduced to their number, season posters blurred.
 func DefaultProfile() Profile {
 	return Profile{
 		Thumbnail:    ThumbBlur,
@@ -50,8 +47,8 @@ func DefaultProfile() Profile {
 	}
 }
 
-// ParseProfile decodes a stored profile JSON blob, falling back to defaults for
-// an empty/missing value and for any field left unset.
+// ParseProfile starts from DefaultProfile, so an empty blob or any unset field
+// falls back to the defaults.
 func ParseProfile(blob string) Profile {
 	p := DefaultProfile()
 	if strings.TrimSpace(blob) == "" || blob == "{}" {
@@ -64,8 +61,7 @@ func ParseProfile(blob string) Profile {
 	return p
 }
 
-// MaskTitle produces the replacement episode title for the configured mode.
-// index is the episode number within its season.
+// MaskTitle's index is the episode number within its season.
 func (p Profile) MaskTitle(original string, index int) string {
 	switch p.TitleMode {
 	case TitleNumber:
@@ -79,7 +75,6 @@ func (p Profile) MaskTitle(original string, index int) string {
 	}
 }
 
-// MaskDescription produces the replacement summary for the configured mode.
 func (p Profile) MaskDescription(show string, season, episode int) string {
 	switch p.Description {
 	case DescClear:
@@ -91,12 +86,12 @@ func (p Profile) MaskDescription(show string, season, episode int) string {
 			"{episode}", fmt.Sprintf("%d", episode),
 		)
 		return r.Replace(p.DescTemplate)
-	default: // DescLeave
-		return "" // caller checks WantsDescriptionChange first
+	default:
+		return ""
 	}
 }
 
-// letters maps 1->A, 2->B, ... 26->Z, 27->AA (spreadsheet-style).
+// letters maps 1->A, 2->B, ... 26->Z, 27->AA, spreadsheet-style.
 func letters(n int) string {
 	if n <= 0 {
 		return ""

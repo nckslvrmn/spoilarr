@@ -12,7 +12,6 @@ import (
 	"github.com/nckslvrmn/spoilarr/internal/store"
 )
 
-// seasonView is one season's row on the settings page.
 type seasonView struct {
 	Index      int
 	Title      string
@@ -22,8 +21,6 @@ type seasonView struct {
 	Days       int
 }
 
-// handleItemSettings renders the spoiler profile + reveal policy editor for one
-// protected show/movie, including per-season override rows.
 func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
 	pi, ok, err := s.store.GetProtectedItem(ratingKey)
@@ -37,8 +34,7 @@ func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 	resolver := protect.NewResolver(defs, pi, overrides)
 
 	inheriting := pi.Profile == "" && (pi.RevealPolicy == "" || pi.RevealPolicy == protect.PolicyInherit)
-	// Effective show-level values for prefilling the form.
-	showProfile := resolver.ProfileFor(-1) // -1 has no override → show/default
+	showProfile := resolver.ProfileFor(-1) // -1 has no override, so it resolves to show/default
 	showPolicy, showDays := resolver.PolicyFor(-1)
 
 	data := map[string]any{
@@ -49,7 +45,6 @@ func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 		"RevealDays":   showDays,
 	}
 
-	// Season rows (shows only).
 	if pi.MediaType == "show" {
 		if client, err := s.plexClient(); err == nil {
 			if seasons, err := client.Children(r.Context(), ratingKey); err == nil {
@@ -77,7 +72,7 @@ func (s *Server) handleItemSettings(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "settings.html", data)
 }
 
-// parseScopeSet mirrors the processor's scope parsing for the settings view.
+// parseScopeSet mirrors the processor's parseScope for the settings view.
 func parseScopeSet(scope string) map[int]bool {
 	if scope == "" || scope == "all" {
 		return nil
@@ -93,8 +88,6 @@ func parseScopeSet(scope string) map[int]bool {
 	return set
 }
 
-// profileFromForm builds a Profile from the standard settings form fields, using
-// an optional prefix (e.g. "s3_" for a season's fields).
 func profileFromForm(r *http.Request, prefix string) protect.Profile {
 	return protect.Profile{
 		Thumbnail:    r.FormValue(prefix + "thumbnail"),
@@ -106,8 +99,8 @@ func profileFromForm(r *http.Request, prefix string) protect.Profile {
 	}
 }
 
-// handleSaveSettings persists the show-level profile + reveal policy, or sets it
-// back to inheriting the global defaults.
+// handleSaveSettings either stores an explicit profile or, when source=inherit,
+// resets the show to follow the global defaults.
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
 	if err := r.ParseForm(); err != nil {
@@ -132,7 +125,6 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleSaveSeasonOverride upserts a per-season override.
 func (s *Server) handleSaveSeasonOverride(w http.ResponseWriter, r *http.Request) {
 	pi, ok, _ := s.store.GetProtectedItem(r.PathValue("ratingKey"))
 	if !ok {
@@ -156,7 +148,6 @@ func (s *Server) handleSaveSeasonOverride(w http.ResponseWriter, r *http.Request
 	s.render(w, "settings_saved", map[string]any{"Message": fmt.Sprintf("Season %d override saved.", idx)})
 }
 
-// handleResetSeasonOverride removes a season override so it inherits the show.
 func (s *Server) handleResetSeasonOverride(w http.ResponseWriter, r *http.Request) {
 	pi, ok, _ := s.store.GetProtectedItem(r.PathValue("ratingKey"))
 	if !ok {
@@ -171,8 +162,8 @@ func (s *Server) handleResetSeasonOverride(w http.ResponseWriter, r *http.Reques
 	s.render(w, "settings_saved", map[string]any{"Message": fmt.Sprintf("Season %d back to inheriting the show.", idx)})
 }
 
-// handleReapply reveals then re-protects an item so profile changes take effect
-// on already-processed episodes. Backups on disk keep the originals intact.
+// handleReapply reveals then re-protects so profile changes reach
+// already-processed episodes. The on-disk backups keep the originals intact.
 func (s *Server) handleReapply(w http.ResponseWriter, r *http.Request) {
 	ratingKey := r.PathValue("ratingKey")
 	pi, ok, err := s.store.GetProtectedItem(ratingKey)

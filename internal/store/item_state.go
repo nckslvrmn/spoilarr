@@ -5,14 +5,13 @@ import (
 	"errors"
 )
 
-// Item states.
 const (
 	StateProtected = "protected"
 	StateRevealed  = "revealed"
 )
 
-// ItemState records what spoilarr did to one episode/season/movie and holds the
-// original metadata so a reveal restores it exactly.
+// ItemState holds the original metadata for one episode/season/movie so a reveal
+// can restore it exactly.
 type ItemState struct {
 	RatingKey         string
 	ProtectedItemID   int64
@@ -20,14 +19,13 @@ type ItemState struct {
 	MediaType         string // episode | season | movie
 	OriginalSummary   string
 	OriginalTitle     string
-	OriginalThumbPath string // path under images/, relative
+	OriginalThumbPath string // relative to images/
 	State             string
 	LastError         string
 }
 
-// UpsertItemState inserts or updates an item's state keyed by rating key. The
-// original_* fields are only written on first insert so we never overwrite a
-// good backup with already-spoilered values on a re-run.
+// UpsertItemState writes original_* only on first insert, so a re-run never
+// overwrites a good backup with already-spoilered values.
 func (s *Store) UpsertItemState(it ItemState) error {
 	_, err := s.db.Exec(
 		`INSERT INTO item_state
@@ -44,7 +42,6 @@ func (s *Store) UpsertItemState(it ItemState) error {
 	return err
 }
 
-// GetItemState returns the state for a rating key, or ok=false if none exists.
 func (s *Store) GetItemState(ratingKey string) (ItemState, bool, error) {
 	var it ItemState
 	var origSummary, origTitle, origThumb, lastErr sql.NullString
@@ -67,8 +64,6 @@ func (s *Store) GetItemState(ratingKey string) (ItemState, bool, error) {
 	return it, true, nil
 }
 
-// SetState transitions an item to a new state (e.g. revealed), stamping the
-// revealed_at time when appropriate.
 func (s *Store) SetState(ratingKey, state string) error {
 	_, err := s.db.Exec(
 		`UPDATE item_state
@@ -80,7 +75,6 @@ func (s *Store) SetState(ratingKey, state string) error {
 	return err
 }
 
-// SetItemError records a per-item processing error without changing its state.
 func (s *Store) SetItemError(ratingKey, msg string) error {
 	_, err := s.db.Exec(
 		`UPDATE item_state SET last_error = ?, updated_at = datetime('now') WHERE rating_key = ?`,
@@ -88,8 +82,8 @@ func (s *Store) SetItemError(ratingKey, msg string) error {
 	return err
 }
 
-// CountStates returns how many items under a parent (show rating key) are
-// currently protected vs revealed. For a movie, pass its own rating key.
+// CountStates counts protected vs revealed items under a parent show key. For a
+// movie, pass its own rating key.
 func (s *Store) CountStates(parentOrSelfKey string) (protected, revealed int, err error) {
 	rows, err := s.db.Query(
 		`SELECT state, COUNT(*) FROM item_state
@@ -115,7 +109,6 @@ func (s *Store) CountStates(parentOrSelfKey string) (protected, revealed int, er
 	return protected, revealed, rows.Err()
 }
 
-// ListItemStatesByParent returns all item states under a show rating key.
 func (s *Store) ListItemStatesByParent(showKey string) ([]ItemState, error) {
 	rows, err := s.db.Query(
 		`SELECT rating_key, media_type, original_thumb_path, state
