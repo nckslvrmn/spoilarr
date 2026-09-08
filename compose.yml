@@ -16,7 +16,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.spoilarr.rule=Host(`spoilarr.slvr.io`)"
-      - "traefik.http.routers.spoilarr.entrypoints=websecure"
+      - "traefik.http.routers.spoilarr.entrypoints=internal"
       - "traefik.http.services.spoilarr.loadbalancer.server.port=8484"
     networks:
       - traefik
