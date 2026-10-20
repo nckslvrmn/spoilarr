@@ -12,7 +12,7 @@ services:
     volumes:
       # Persistent SQLite DB + image backups. Bind mount on host persists
       # data across restarts.
-      - /mnt/data/spoilarr:/data
+      - /app/spoilarr:/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.spoilarr.rule=Host(`spoilarr.slvr.io`)"
